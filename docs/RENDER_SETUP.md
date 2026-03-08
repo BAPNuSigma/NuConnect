@@ -4,6 +4,25 @@ Use this when you're on the **New Web Service** form and need to know exactly wh
 
 ---
 
+## ⚠️ Data disappearing after each deploy? (Firms / speaker logs reset)
+
+If your **firms list and speaker logs clear out every time you deploy**, the app is not using a **persistent disk**. The SQLite database lives in the `data/` folder; without a disk that folder is wiped on every new deploy.
+
+**Fix:**
+
+1. **Instance must be Starter ($7/mo) or higher.** The **Free** plan does **not** support disks — your data cannot persist on Free.
+2. **Add a disk** (if you don’t have one):
+   - In Render: open your **NuConnect** service → **Settings** (or **Environment** tab) → scroll to **Advanced**.
+   - Click **Add disk** (or edit the existing one).
+   - **Mount Path:** must be exactly **`data`** (the app stores the DB in `./data/nuconnect.db`).
+   - **Size:** 1 GB (or more). **Name:** e.g. `nuconnect-data`.
+   - Save. **Redeploy** the service once so the disk is mounted.
+3. **Confirm the disk is there:** After a redeploy, your firms and speaker logs should still be there. If they’re still clearing, double-check the instance is not Free and the disk mount path is exactly `data` (no leading slash, no different path).
+
+Once the disk is attached and mounted at `data`, all future deploys will keep your data.
+
+---
+
 ## 1. Main form (source, name, build, start)
 
 | Field | What to enter |
@@ -57,14 +76,14 @@ Click **“Add Environment Variable”** (or **“Add from .env”** and paste f
 
 Click **Advanced** to expand.
 
-### Disk (required for SQLite)
+### Disk (required so firms & speaker logs survive deploys)
 
 - Click **“Add disk”**.
-- **Mount Path:** `data`
-- **Size:** 1 GB (or more if you prefer)
-- **Name:** e.g. `nuconnect-data`
+- **Mount Path:** exactly **`data`** (the app uses the folder `data/` in the project root for the SQLite file).
+- **Size:** 1 GB (or more if you prefer).
+- **Name:** e.g. `nuconnect-data`.
 
-Without this disk, the database would be lost on every deploy.
+**If you skip this or use the Free plan (no disks), the database will be wiped on every deploy** and your firms list and speaker logs will reset.
 
 ### Health Check Path
 

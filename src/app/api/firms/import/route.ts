@@ -32,16 +32,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
   }
   const file = formData.get("file");
-  if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "No file uploaded. Use field name 'file' and upload a .xlsx file." }, { status: 400 });
+  if (!file || typeof file !== "object" || !("arrayBuffer" in file && typeof (file as Blob).arrayBuffer === "function")) {
+    return NextResponse.json({ error: "No file uploaded. Use field name 'file' and upload a .xlsx or .xls file." }, { status: 400 });
   }
-  if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+  const blob = file as Blob & { name?: string };
+  const fileName = blob.name ?? "upload.xlsx";
+  if (!fileName.toLowerCase().endsWith(".xlsx") && !fileName.toLowerCase().endsWith(".xls")) {
     return NextResponse.json({ error: "File must be .xlsx or .xls" }, { status: 400 });
   }
 
   let rows: unknown[][];
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = Buffer.from(await blob.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
   }
 
   if (rows.length < 2) {
-    return NextResponse.json({ inserted: 0, updated: 0, skipped: rows.length - 1, error: "No data rows (need a header row and at least one data row)" });
+    return NextResponse.json({ error: "No data rows (need a header row and at least one data row)" }, { status: 400 });
   }
 
   const rawHeaders = (rows[0] as unknown[]).map((h) => (h ?? "").toString().trim());
@@ -98,11 +100,9 @@ export async function POST(request: Request) {
     noteCol = 11;
   } else {
     const col = (keywords: string[]) => findCol(headers, keywords);
-    nameCol = col(["firm name", "firm"]);
-    if (nameCol < 0) {
-      const fallback = col(["company", "name", "organization"]);
-      if (fallback >= 0 && !headers[fallback].includes("discipline")) nameCol = fallback;
-    }
+    nameCol = findCol(headers, ["firm name"]); // prefer exact "firm name" column
+    if (nameCol < 0) nameCol = findCol(headers, ["firm", "company", "name", "organization"]);
+    if (nameCol >= 0 && headers[nameCol]?.includes("discipline")) nameCol = -1; // avoid "organization discipline"
     if (nameCol === -1) {
       return NextResponse.json({
         error: "Required column not found. First row must include a column named something like: Firm Name, Company, Name, or Organization.",
@@ -125,45 +125,51 @@ export async function POST(request: Request) {
   let inserted = 0;
   let skipped = 0;
 
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i] as unknown[];
-    const name = safeStr(getCell(row, nameCol));
-    if (!name) {
-      skipped++;
-      continue;
+  try {
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i] as unknown[];
+      const name = safeStr(getCell(row, nameCol));
+      if (!name) {
+        skipped++;
+        continue;
+      }
+
+      const now = new Date();
+      const discipline = safeStr(getCell(row, disciplineCol)) || null;
+      const contactFirstName = safeStr(getCell(row, contactFirstCol)) || null;
+      const contactLastName = safeStr(getCell(row, contactLastCol)) || null;
+      const contactEmail = safeStr(getCell(row, emailCol)) || null;
+      const title = safeStr(getCell(row, titleCol)) || null;
+      const practiceArea = safeStr(getCell(row, practiceAreaCol)) || null;
+      const firmType = safeStr(getCell(row, firmTypeCol)) || null;
+      const industryFocus = safeStr(getCell(row, industryFocusCol)) || null;
+      const location = safeStr(getCell(row, locationCol)) || null;
+      const alumniConnection = safeStr(getCell(row, alumniCol)) || null;
+      const personalizedNote = safeStr(getCell(row, noteCol)) || null;
+      const notes = safeStr(getCell(row, noteCol)) || null;
+
+      await db.insert(firms).values({
+        name,
+        discipline,
+        contactFirstName,
+        contactLastName,
+        contactEmail: contactEmail || null,
+        title,
+        practiceArea,
+        firmType,
+        industryFocus,
+        location,
+        alumniConnection,
+        personalizedNote,
+        notes,
+        updatedAt: now,
+      });
+      inserted++;
     }
-
-    const now = new Date();
-    const discipline = safeStr(getCell(row, disciplineCol)) || null;
-    const contactFirstName = safeStr(getCell(row, contactFirstCol)) || null;
-    const contactLastName = safeStr(getCell(row, contactLastCol)) || null;
-    const contactEmail = safeStr(getCell(row, emailCol)) || null;
-    const title = safeStr(getCell(row, titleCol)) || null;
-    const practiceArea = safeStr(getCell(row, practiceAreaCol)) || null;
-    const firmType = safeStr(getCell(row, firmTypeCol)) || null;
-    const industryFocus = safeStr(getCell(row, industryFocusCol)) || null;
-    const location = safeStr(getCell(row, locationCol)) || null;
-    const alumniConnection = safeStr(getCell(row, alumniCol)) || null;
-    const personalizedNote = safeStr(getCell(row, noteCol)) || null;
-    const notes = safeStr(getCell(row, noteCol)) || null;
-
-    await db.insert(firms).values({
-      name,
-      discipline,
-      contactFirstName,
-      contactLastName,
-      contactEmail: contactEmail || null,
-      title,
-      practiceArea,
-      firmType,
-      industryFocus,
-      location,
-      alumniConnection,
-      personalizedNote,
-      notes,
-      updatedAt: now,
-    });
-    inserted++;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Firms import error:", err);
+    return NextResponse.json({ error: `Import failed: ${message}` }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, inserted, skipped });

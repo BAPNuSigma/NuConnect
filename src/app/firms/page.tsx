@@ -265,7 +265,9 @@ export default function FirmsPage() {
         }
       }
       if (!res.ok) {
-        alert(data.error || "Import failed. " + (data.headersFound ? "Headers found: " + data.headersFound.join(", ") : ""));
+        const msg = data.error || "Import failed.";
+        const extra = data.headersFound?.length ? " Headers in file: " + data.headersFound.join(", ") : "";
+        alert(msg + extra);
         return;
       }
       alert(`Import complete. Inserted: ${data.inserted ?? 0}, Skipped (empty name): ${data.skipped ?? 0}`);

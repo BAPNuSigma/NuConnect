@@ -66,7 +66,7 @@ Summary:
 
 4. **Environment variables:** Add `GMAIL_USER` and `GMAIL_APP_PASSWORD` (or Resend keys). Optionally `GOOGLE_FORMS_WEBHOOK_SECRET`.
 
-5. **Advanced → Add disk:** Mount path `data`, size 1 GB (so SQLite persists across deploys). Clear **Health Check Path** or set to `/`.
+5. **Advanced → Add disk:** Mount path **`data`**, size 1 GB. **Required** — without it, firms and speaker logs are wiped on every deploy (Free tier has no disks; use Starter or higher).
 
 6. Click **Deploy Web Service**. Use the resulting URL for the app and for the Google Form webhook.
 
