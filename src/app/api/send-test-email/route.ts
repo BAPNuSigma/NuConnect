@@ -20,9 +20,9 @@ export async function POST() {
   console.log("[send-test-email] Sending test email to", testModeEmail);
   const result = await sendEmail({
     to: testModeEmail,
-    subject: "[NuConnect] Test email",
+    subject: "[BAP FDU] Test email",
     html: `
-      <p>This is a test email from NuConnect.</p>
+      <p>This is a test email from BAP FDU.</p>
       <p>If you received this, your test email is working and is being delivered to this address.</p>
       <p>Invite emails in test mode will also be sent to this address.</p>
     `,

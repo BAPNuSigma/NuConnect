@@ -10,7 +10,7 @@ export type SendEmailOptions = {
 
 /** Uses Gmail if GMAIL_USER + GMAIL_APP_PASSWORD are set; otherwise Resend if RESEND_API_KEY is set. */
 export async function sendEmail(options: SendEmailOptions): Promise<{ ok: true; id?: string } | { ok: false; error: string }> {
-  const { to, subject, html, fromName = "NuConnect" } = options;
+  const { to, subject, html, fromName = "BAP FDU" } = options;
 
   const gmailUser = process.env.GMAIL_USER;
   const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
