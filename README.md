@@ -60,15 +60,9 @@ Then open **http://localhost:3000**.
    - **Start command:** `npx drizzle-kit push && npm start`
    - **Add a disk:** mount path `data`, size 1 GB (so the SQLite DB persists across deploys).
 
-3. **Environment variables:** In the Render dashboard, add your env vars (e.g. `GMAIL_USER`, `GMAIL_APP_PASSWORD`, or Resend keys). Optionally: `GOOGLE_FORMS_WEBHOOK_SECRET`, `CRON_SECRET`, `CURRENT_SEMESTER_ID`.
+3. **Environment variables:** In the Render dashboard, add your env vars (e.g. `GMAIL_USER`, `GMAIL_APP_PASSWORD`, or Resend keys). Optionally: `GOOGLE_FORMS_WEBHOOK_SECRET`.
 
-4. **Optional – 9 AM invite cron:** In Render, add a **Cron Job** that runs daily (e.g. 9 AM your time). Command:
-   ```bash
-   curl -X POST https://your-app-url.onrender.com/api/send-invites-batch -H "Content-Type: application/json" -d "{}"
-   ```
-   If you set `CRON_SECRET`, add header: `Authorization: Bearer <CRON_SECRET>`.
-
-5. After deploy, use your Render URL for the Google Form webhook and any cron calls.
+4. After deploy, use your Render URL for the Google Form webhook.
 
 ---
 
@@ -133,25 +127,11 @@ Use Google Apps Script on your form’s **Submit** trigger to POST the form resp
 
 ---
 
-## ⏰ Daily send & manual trigger
+## ⏰ Sending invites
 
-- **Only new firms get emailed:** Each run (9 AM or manual) sends invites only to firms that are eligible for the selected semester and do **not** already have an invite record. Already-sent firms stay marked and are not emailed again for that semester.
+- **Only new firms get emailed:** Each time you send, the app emails only firms that are eligible for the selected semester and do **not** already have an invite record. Already-sent firms stay marked and are not emailed again for that semester.
 
 - **Manual trigger:** On the **Invites** page, choose a semester and click **Send all pending now**.
-
-- **9 AM automatic (Vercel):** `vercel.json` calls `POST /api/send-invites-batch` daily at **14:00 UTC** (9:00 AM US Eastern). Set `CURRENT_SEMESTER_ID` in env, or the app uses the latest semester. Cron uses UTC—adjust `schedule` as needed.
-
-- **9 AM on Render:** Use a Render **Cron Job** to `POST` to `/api/send-invites-batch` daily (see [Deploy on Render](#-deploy-on-render)).
-
-- **9 AM on your own server:** Use Task Scheduler, cron, etc.:
-
-  ```bash
-  curl -X POST https://your-app-url/api/send-invites-batch \
-    -H "Content-Type: application/json" \
-    -d "{}"
-  ```
-
-  Optional: set `CRON_SECRET` and send `Authorization: Bearer <CRON_SECRET>`.
 
 ---
 
