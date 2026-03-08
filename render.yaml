@@ -1,0 +1,17 @@
+# Render Blueprint — NuConnect
+# Deploy: connect repo in Render dashboard or use "New > Blueprint"
+# Set env vars (GMAIL_* or RESEND_*, etc.) in Render dashboard.
+
+services:
+  - type: web
+    name: nuconnect
+    runtime: node
+
+    buildCommand: npm install && npm run build
+    startCommand: npx drizzle-kit push && npm start
+
+    # Persistent disk for SQLite (required for data to survive deploys)
+    disk:
+      name: nuconnect-data
+      mountPath: data
+      sizeGB: 1

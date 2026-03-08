@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f0f12;
+  --foreground: #e8e6e3;
+  --card: #18181c;
+  --muted: #71717a;
+  --accent: #a78bfa;
+  --accent-dim: #7c3aed;
+  --success: #22c55e;
+  --warning: #eab308;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-zinc-800 bg-[var(--card)] p-5 shadow-lg;
+  }
+  .btn {
+    @apply rounded-lg px-4 py-2 font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--background)];
+  }
+  .btn-primary {
+    @apply btn bg-[var(--accent)] text-white hover:bg-[var(--accent-dim)] focus:ring-[var(--accent)];
+  }
+  .btn-ghost {
+    @apply btn text-zinc-300 hover:bg-zinc-800 focus:ring-zinc-600;
+  }
+  .input {
+    @apply w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[var(--foreground)] placeholder-zinc-500 focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)];
+  }
+  .table-wrap {
+    @apply overflow-x-auto rounded-lg border border-zinc-800;
+  }
+  .table-wrap table {
+    @apply w-full min-w-[600px] text-left text-sm;
+  }
+  .table-wrap th {
+    @apply border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 font-semibold text-zinc-300;
+  }
+  .table-wrap td {
+    @apply border-b border-zinc-800/80 px-4 py-3 text-zinc-400;
+  }
+  .table-wrap tbody tr:hover {
+    @apply bg-zinc-800/40;
+  }
+}
