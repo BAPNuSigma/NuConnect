@@ -140,8 +140,9 @@ export async function PATCH(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const set: { outcome?: string; logDate?: string; thankYouSent?: boolean; thankYouSentAt?: string | null; notes?: string | null; updatedAt: Date } = { updatedAt: new Date() };
-  if (parsed.data.outcome !== undefined) set.outcome = parsed.data.outcome;
+  type Outcome = "confirm" | "spoke" | "cancel" | "rescheduled";
+  const set: { outcome?: Outcome; logDate?: string; thankYouSent?: boolean; thankYouSentAt?: string | null; notes?: string | null; updatedAt: Date } = { updatedAt: new Date() };
+  if (parsed.data.outcome !== undefined) set.outcome = parsed.data.outcome as Outcome;
   if (parsed.data.logDate !== undefined) set.logDate = parsed.data.logDate;
   if (parsed.data.notes !== undefined) set.notes = parsed.data.notes;
   if (parsed.data.thankYouSent !== undefined) {

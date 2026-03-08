@@ -53,16 +53,22 @@ Then open **http://localhost:3000**.
 
 ## ☁️ Deploy on Render
 
-1. **Push to GitHub** (see [Push to GitHub](#-push-to-github) below), then in [Render](https://render.com): **New → Web Service**, connect your repo.
+**Step-by-step:** See **[docs/RENDER_SETUP.md](docs/RENDER_SETUP.md)** for exact fields to fill on the New Web Service form (build/start commands, env vars, disk, health check).
 
-2. **Render will use the repo’s `render.yaml`** (build, start, and a persistent disk for SQLite). If you don’t use the Blueprint, set:
-   - **Build command:** `npm install && npm run build`
-   - **Start command:** `npx drizzle-kit push && npm start`
-   - **Add a disk:** mount path `data`, size 1 GB (so the SQLite DB persists across deploys).
+Summary:
 
-3. **Environment variables:** In the Render dashboard, add your env vars (e.g. `GMAIL_USER`, `GMAIL_APP_PASSWORD`, or Resend keys). Optionally: `GOOGLE_FORMS_WEBHOOK_SECRET`.
+1. **New → Web Service**, connect repo `BAPNuSigma/NuConnect`, branch `main`.
 
-4. After deploy, use your Render URL for the Google Form webhook.
+2. **Build command:** `npm install && npm run build`  
+   **Start command:** `npx drizzle-kit push && npm start` (required so the DB exists before the app starts).
+
+3. **Instance:** Use **Starter** ($7/mo) or higher — the Free tier doesn’t support the persistent disk.
+
+4. **Environment variables:** Add `GMAIL_USER` and `GMAIL_APP_PASSWORD` (or Resend keys). Optionally `GOOGLE_FORMS_WEBHOOK_SECRET`.
+
+5. **Advanced → Add disk:** Mount path `data`, size 1 GB (so SQLite persists across deploys). Clear **Health Check Path** or set to `/`.
+
+6. Click **Deploy Web Service**. Use the resulting URL for the app and for the Google Form webhook.
 
 ---
 

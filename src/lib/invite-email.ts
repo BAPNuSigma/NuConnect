@@ -1,3 +1,4 @@
+import { db } from "@/db";
 import { appSettings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -53,13 +54,7 @@ export function applyPlaceholders(
  * Get template: subject and body are always the fixed BAP template; only yourName, eBoardPosition, schedulingLink come from DB.
  * {{semester}} in the subject is replaced with the semester you're recruiting for when sending.
  */
-export async function getInviteTemplate(db: {
-  query: {
-    appSettings: {
-      findFirst: (opts: { where: unknown; columns?: unknown }) => Promise<{ value: string } | undefined>;
-    };
-  };
-}): Promise<{
+export async function getInviteTemplate(dbInstance: typeof db): Promise<{
   subject: string;
   body: string;
   yourName: string;
@@ -68,10 +63,10 @@ export async function getInviteTemplate(db: {
   signatureEnabled: boolean;
 }> {
   const [yourNameRow, eBoardRow, linkRow, signatureRow] = await Promise.all([
-    db.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_YOUR_NAME_KEY), columns: { value: true } }),
-    db.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_EBOARD_POSITION_KEY), columns: { value: true } }),
-    db.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_SCHEDULING_LINK_KEY), columns: { value: true } }),
-    db.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_SIGNATURE_ENABLED_KEY), columns: { value: true } }),
+    dbInstance.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_YOUR_NAME_KEY), columns: { value: true } }),
+    dbInstance.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_EBOARD_POSITION_KEY), columns: { value: true } }),
+    dbInstance.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_SCHEDULING_LINK_KEY), columns: { value: true } }),
+    dbInstance.query.appSettings.findFirst({ where: eq(appSettings.key, INVITE_EMAIL_SIGNATURE_ENABLED_KEY), columns: { value: true } }),
   ]);
   return {
     subject: DEFAULT_SUBJECT,
