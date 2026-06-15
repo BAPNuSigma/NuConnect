@@ -18,16 +18,16 @@ Then the script must send `Authorization: Bearer your-random-secret` in the requ
 
 ---
 
-## 2. Code for BAP form: [2026 Fall Semester Speaker Sign-Up](https://forms.gle/kMLuHnfpX6umXUTC9)
+## 2. Code for BAP form: [2026 Fall Semester Speaker Sign-Up](https://forms.gle/Xp6TqDPsDm8GWKrU7)
 
 Use this script if your form is the **2026 Fall Semester Speaker Sign-Up Sheet** (Firm Name, Discipline, Primary/Secondary Contact, Preferred date & location, Presentation topic, Recording OK, How did you hear about us). It sends `firmName` and `semester: "Fall 2026"` so NuConnect can match the submission, plus all other answers in the payload.
 
-**Setup:** Open the form → **⋮** → **Script editor**. Paste the code below. Set `WEBHOOK_URL` (and `WEBHOOK_SECRET` if you use it). Add trigger: **Triggers** → **Add Trigger** → function `onFormSubmit`, event **From form** → **On form submit**.
+**Setup:** Open the form → **⋮** (three dots) → **Script editor**. Paste the code below. Set `WEBHOOK_URL` to your NuConnect URL (e.g. `https://nuconnect-katc.onrender.com/api/webhooks/google-forms`). Set `WEBHOOK_SECRET` if you use it in Render. Then: **Triggers** (clock icon) → **Add Trigger** → function `onFormSubmit`, event **From form** → **On form submit** → Save.
 
 ```javascript
 // ============ CONFIG — edit these ============
-var WEBHOOK_URL = "https://your-nuconnect-url.com/api/webhooks/google-forms";
-var WEBHOOK_SECRET = "";  // Same as GOOGLE_FORMS_WEBHOOK_SECRET in .env, or "" if not set
+var WEBHOOK_URL = "https://nuconnect-katc.onrender.com/api/webhooks/google-forms";
+var WEBHOOK_SECRET = "";  // Same as GOOGLE_FORMS_WEBHOOK_SECRET in Render env, or "" if not set
 var FORM_SEMESTER = "Fall 2026";  // This form is for Fall 2026
 
 // ============ Script (BAP 2026 Fall Speaker Sign-Up form) ============
