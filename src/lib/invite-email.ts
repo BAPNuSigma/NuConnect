@@ -15,7 +15,7 @@ const DEFAULT_BODY = `<p>Dear {{contactName}},</p>
 <p>My name is {{yourName}} and I serve as the {{eBoardPosition}} for the Beta Alpha Psi ("BAP") Nu Sigma Chapter at Fairleigh Dickinson University: Silberman College of Business.</p>
 <p>We would be honored to invite {{firmName}} to present to our chapter this coming {{semester}}. This is a fantastic opportunity to network with high-achieving Accounting, Finance, and MIS students from our Madison, Teaneck, and Vancouver campuses, and to share insights into your firm and industry.</p>
 <p><strong>About Our Chapter</strong></p>
-<p>We are proud to share that our chapter was recognized as a 2023-2024 &amp; 2024-2025 Gold Chapter. We are currently one of only two chapters in New Jersey to hold this distinction.</p>
+<p>We are proud to share that our chapter was recognized as a 2023-2024, 2024-2025, &amp; 2025-2026 Gold Chapter. We are currently one of only two chapters in New Jersey to hold this distinction.</p>
 <p>To maintain membership in this internationally recognized honor society, our students must carry a minimum 3.20 GPA and actively participate in tutoring and community service. You will be speaking to a dedicated group of aspiring professionals eager to learn from your expertise.</p>
 <p><strong>How to Secure Your Spot</strong></p>
 <p>We have introduced a new scheduling form to make booking your presentation date easier. Please note that our meetings generally take place on Wednesdays from 4:30 PM – 5:30 PM EST.</p>
