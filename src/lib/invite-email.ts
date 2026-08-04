@@ -78,7 +78,7 @@ export async function getInviteTemplate(dbInstance: typeof db): Promise<{
   };
 }
 
-const BAP_WEBSITE_URL = "https://bapfdu.wixsite.com/website";
+const BAP_WEBSITE_URL = "https://bapfdu.com";
 const BAP_SOCIAL_URL = "https://linktr.ee/BAPFDU";
 
 /**
