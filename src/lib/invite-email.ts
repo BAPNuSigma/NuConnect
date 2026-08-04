@@ -115,7 +115,6 @@ export function buildInviteEmail(
     const name = template.yourName || "E-Board";
     const position = template.eBoardPosition
       ? `${template.eBoardPosition} of Beta Alpha Psi: Nu Sigma Chapter`
-      : "Beta Alpha Psi: Nu Sigma Chapter";
     html += `
 <p>${name}</p>
 <p>${position}</p>
