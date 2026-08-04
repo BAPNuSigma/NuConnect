@@ -113,9 +113,7 @@ export function buildInviteEmail(
   }
   if (template.signatureEnabled) {
     const name = template.yourName || "E-Board";
-    const position = template.eBoardPosition
-      ? `${template.eBoardPosition} of Beta Alpha Psi: Nu Sigma Chapter`
-      : "Beta Alpha Psi: Nu Sigma Chapter";
+    const position = template.eBoardPosition || "Beta Alpha Psi: Nu Sigma Chapter";
     html += `
 <p>${name}</p>
 <p>${position}</p>
