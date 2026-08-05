@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:validate:persistence": "node scripts/validate-libsql-persistence.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",
