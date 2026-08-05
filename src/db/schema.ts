@@ -104,22 +104,22 @@ export const semestersRelations = relations(semesters, ({ many }) => ({
 }));
 
 export const eventsRelations = relations(events, ({ one }) => ({
-  firm: one(firms),
-  semester: one(semesters),
+  firm: one(firms, { fields: [events.firmId], references: [firms.id] }),
+  semester: one(semesters, { fields: [events.semesterId], references: [semesters.id] }),
 }));
 
 export const speakerLogsRelations = relations(speakerLogs, ({ one }) => ({
-  firm: one(firms),
-  semester: one(semesters),
-  event: one(events),
+  firm: one(firms, { fields: [speakerLogs.firmId], references: [firms.id] }),
+  semester: one(semesters, { fields: [speakerLogs.semesterId], references: [semesters.id] }),
+  event: one(events, { fields: [speakerLogs.eventId], references: [events.id] }),
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({
-  firm: one(firms),
-  semester: one(semesters),
+  firm: one(firms, { fields: [invites.firmId], references: [firms.id] }),
+  semester: one(semesters, { fields: [invites.semesterId], references: [semesters.id] }),
 }));
 
 export const schedulingSubmissionsRelations = relations(schedulingSubmissions, ({ one }) => ({
-  firm: one(firms),
-  semester: one(semesters),
+  firm: one(firms, { fields: [schedulingSubmissions.firmId], references: [firms.id] }),
+  semester: one(semesters, { fields: [schedulingSubmissions.semesterId], references: [semesters.id] }),
 }));
