@@ -1,12 +1,24 @@
 import { defineConfig } from "drizzle-kit";
-import path from "path";
 
-// Use same path as app (DATABASE_URL on Render = /var/data/nuconnect.db)
-const dbUrl = process.env.DATABASE_URL || path.join(process.cwd(), "data", "nuconnect.db");
+const databaseUrl = process.env.TURSO_DATABASE_URL;
+const authToken = process.env.TURSO_AUTH_TOKEN;
+
+if (!databaseUrl) {
+  throw new Error("TURSO_DATABASE_URL is required for Drizzle Kit commands.");
+}
+
+const isLocalFileDatabase = databaseUrl.startsWith("file:");
+
+if (!isLocalFileDatabase && !authToken) {
+  throw new Error("TURSO_AUTH_TOKEN is required for remote Turso/libSQL Drizzle Kit commands.");
+}
 
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
-  dialect: "sqlite",
-  dbCredentials: { url: dbUrl },
+  dialect: "turso",
+  dbCredentials: {
+    url: databaseUrl,
+    authToken: isLocalFileDatabase ? undefined : authToken,
+  },
 });
