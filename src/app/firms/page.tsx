@@ -25,6 +25,27 @@ type Firm = {
 
 const PAGE_SIZES = [10, 25, 50, 100] as const;
 
+const exportColumns: { header: string; value: (firm: Firm) => string | number }[] = [
+  { header: "Organization Discipline", value: (firm) => firm.discipline ?? "" },
+  { header: "Firm Name", value: (firm) => firm.name ?? "" },
+  { header: "Contact First Name", value: (firm) => firm.contactFirstName ?? "" },
+  { header: "Contact Last Name", value: (firm) => firm.contactLastName ?? "" },
+  { header: "Email", value: (firm) => firm.contactEmail ?? "" },
+  { header: "Title", value: (firm) => firm.title ?? "" },
+  { header: "Practice Area", value: (firm) => firm.practiceArea ?? "" },
+  { header: "Firm Type", value: (firm) => firm.firmType ?? "" },
+  { header: "Industry Focus", value: (firm) => firm.industryFocus ?? "" },
+  { header: "Location", value: (firm) => firm.location ?? "" },
+  { header: "Alumni Connection", value: (firm) => firm.alumniConnection ?? "" },
+  { header: "Personalization Notes", value: (firm) => firm.personalizedNote ?? "" },
+  { header: "Notes", value: (firm) => firm.notes ?? "" },
+  { header: "Last Year Invited", value: (firm) => firm.lastAcademicYearInvited ?? "" },
+  { header: "Last Year Spoke", value: (firm) => firm.lastAcademicYearSpoke ?? "" },
+  { header: "Last Semester Spoke", value: (firm) => firm.lastSemesterSpoke ?? "" },
+];
+
+const getExcelDateStamp = () => new Date().toISOString().slice(0, 10);
+
 const emptyForm = {
   name: "",
   discipline: "",
@@ -247,6 +268,21 @@ export default function FirmsPage() {
     }
   };
 
+  const exportToExcel = async () => {
+    if (filteredFirms.length === 0) return;
+
+    const XLSX = await import("xlsx");
+    const rows = filteredFirms.map((firm) =>
+      Object.fromEntries(exportColumns.map((column) => [column.header, column.value(firm)]))
+    );
+    const worksheet = XLSX.utils.json_to_sheet(rows, { header: exportColumns.map((column) => column.header) });
+    worksheet["!cols"] = exportColumns.map((column) => ({ wch: Math.max(column.header.length + 2, 18) }));
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Firms");
+    XLSX.writeFile(workbook, `firms-${getExcelDateStamp()}.xlsx`);
+  };
+
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -297,6 +333,14 @@ export default function FirmsPage() {
             className="btn-ghost disabled:opacity-50"
           >
             {importing ? "Importing…" : "Import from Excel"}
+          </button>
+          <button
+            type="button"
+            onClick={exportToExcel}
+            disabled={filteredFirms.length === 0}
+            className="btn-ghost disabled:opacity-50"
+          >
+            Export to Excel
           </button>
           <button
             type="button"
