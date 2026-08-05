@@ -7,6 +7,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![Drizzle](https://img.shields.io/badge/Drizzle-ORM-292D3E?style=for-the-badge)](https://orm.drizzle.team/)
+[![Turso](https://img.shields.io/badge/Turso-libSQL-4FF8D2?style=for-the-badge)](https://turso.tech/)
 
 **Send invites · Enforce eligibility · Track speakers · Sync your form**
 
@@ -17,6 +18,8 @@
 ## Overview
 
 **NuConnect** is a lightweight CRM built for chapter speaker coordination. Manage firm contacts, send semester invite emails, enforce a **1-year eligibility rule**, and keep in-house **speaker logs**—all in one place. Optionally receive scheduling submissions from a Google Form via webhook.
+
+NuConnect uses Turso/libSQL through Drizzle ORM so writes persist correctly on serverless hosts such as Vercel.
 
 ---
 
@@ -38,12 +41,16 @@
 # 1. Install dependencies
 npm install
 
-# 2. Create the database
-mkdir -p data
-npx drizzle-kit push
+# 2. Configure local development database
+cp .env.example .env
+# In .env, use a local file URL for development:
+# TURSO_DATABASE_URL=file:./data/nuconnect.db
+# TURSO_AUTH_TOKEN=
 
-# 3. Configure environment (copy .env.example to .env and set Gmail or Resend)
-# 4. Run the app
+# 3. Create the database schema
+npm run db:push
+
+# 4. Configure Gmail if you plan to send email, then run the app
 npm run dev
 ```
 
@@ -51,24 +58,54 @@ Then open **http://localhost:3000**.
 
 ---
 
-## ☁️ Deploy on Render
+## ☁️ Deploy on Vercel with Turso
 
-**Step-by-step:** See **[docs/RENDER_SETUP.md](docs/RENDER_SETUP.md)** for exact fields to fill on the New Web Service form (build/start commands, env vars, disk, health check).
+NuConnect should be deployed to Vercel with a Turso/libSQL database. Do not rely on a local SQLite file in Vercel; serverless filesystem writes are not durable.
 
-Summary:
+### 1. Create separate Turso databases
 
-1. **New → Web Service**, connect repo `BAPNuSigma/NuConnect`, branch `main`.
+Create one Turso database for **Production** and a separate Turso database for **Preview** deployments. Keeping the databases separate prevents test or branch-preview data from changing live chapter data.
 
-2. **Build command:** `npm install && npm run build`  
-   **Start command:** `npx drizzle-kit push && npm start` (required so the DB exists before the app starts).
+Example naming pattern:
 
-3. **Instance:** Use **Starter** ($7/mo) or higher — the Free tier doesn’t support the persistent disk.
+- `nuconnect-production`
+- `nuconnect-preview`
 
-4. **Environment variables:** Add `GMAIL_USER` and `GMAIL_APP_PASSWORD` (or Resend keys). Optionally `GOOGLE_FORMS_WEBHOOK_SECRET`.
+This project does **not** automatically import existing Render SQLite data. If you need historical Render data, export and import it deliberately before cutting over traffic.
 
-5. **Advanced → Add disk:** Mount path **`data`**, size 1 GB. **Required** — without it, firms and speaker logs are wiped on every deploy (Free tier has no disks; use Starter or higher).
+### 2. Configure Vercel environment variables
 
-6. Click **Deploy Web Service**. Use the resulting URL for the app and for the Google Form webhook.
+Use the same variable names in both Vercel environments, but set different environment-scoped values:
+
+| Variable | Production value | Preview value |
+|----------|------------------|---------------|
+| `TURSO_DATABASE_URL` | Production Turso database URL | Preview Turso database URL |
+| `TURSO_AUTH_TOKEN` | Production Turso token | Preview Turso token |
+| `GMAIL_USER` | Chapter Gmail account, if sending mail | Test or chapter Gmail account |
+| `GMAIL_APP_PASSWORD` | Gmail app password | Preview/test Gmail app password |
+| `GOOGLE_FORMS_WEBHOOK_SECRET` | Production webhook secret | Preview webhook secret |
+
+Never commit real database URLs, auth tokens, app passwords, or webhook secrets.
+
+### 3. Initialize each blank database
+
+Run Drizzle against the selected Turso database after setting environment variables locally or in your shell. Initialize **Preview** and **Production** separately:
+
+```bash
+TURSO_DATABASE_URL="libsql://your-preview-database.turso.io" \
+TURSO_AUTH_TOKEN="your-preview-token" \
+npm run db:push
+
+TURSO_DATABASE_URL="libsql://your-production-database.turso.io" \
+TURSO_AUTH_TOKEN="your-production-token" \
+npm run db:push
+```
+
+`npm run db:push` creates the schema for a blank database. Alternatively, use `npm run db:generate` and `npm run db:migrate` if you prefer checked-in migration files.
+
+### 4. Deploy
+
+Connect `BAPNuSigma/NuConnect` to Vercel and deploy from the intended branch. Set the environment variables above in Vercel before using the app.
 
 ---
 
@@ -80,25 +117,33 @@ Summary:
 npm install
 ```
 
-### 2. Create the database
+### 2. Configure environment
+
+Copy `.env.example` to `.env` and set local values:
 
 ```bash
-mkdir -p data
-npx drizzle-kit push
+TURSO_DATABASE_URL=file:./data/nuconnect.db
+TURSO_AUTH_TOKEN=
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
+GOOGLE_FORMS_WEBHOOK_SECRET=
 ```
 
-> Or use `npx drizzle-kit generate` then `npx drizzle-kit migrate` if you prefer migrations.
+A `file:` URL is supported for local development and automated validation without an auth token. Remote `libsql://` Turso databases require `TURSO_AUTH_TOKEN`.
 
-### 3. Email (Gmail or Resend)
+### 3. Create the database schema
 
-Copy `.env.example` to `.env` and set:
+```bash
+npm run db:push
+```
 
-- **Gmail:** `GMAIL_USER` (chapter Gmail) and `GMAIL_APP_PASSWORD` ([App Password](https://myaccount.google.com/apppasswords)).
-- **Resend:** `RESEND_API_KEY` and `RESEND_FROM_EMAIL`.
+> Or use `npm run db:generate` then `npm run db:migrate` if you prefer migrations.
 
-Invites are sent from the configured account.
+### 4. Email
 
-### 4. Run the app
+Set `GMAIL_USER` (chapter Gmail) and `GMAIL_APP_PASSWORD` ([App Password](https://myaccount.google.com/apppasswords)) if you plan to send invite emails.
+
+### 5. Run the app
 
 ```bash
 npm run dev
@@ -136,7 +181,6 @@ Use Google Apps Script on your form’s **Submit** trigger to POST the form resp
 ## ⏰ Sending invites
 
 - **Only new firms get emailed:** Each time you send, the app emails only firms that are eligible for the selected semester and do **not** already have an invite record. Already-sent firms stay marked and are not emailed again for that semester.
-
 - **Manual trigger:** On the **Invites** page, choose a semester and click **Send all pending now**.
 
 ---
@@ -152,28 +196,6 @@ Use Google Apps Script on your form’s **Submit** trigger to POST the form resp
 | `npm run db:generate` | Generate migrations. |
 | `npm run db:migrate` | Run migrations. |
 | `npm run db:studio` | Open Drizzle Studio on the DB. |
-
----
-
-## 📤 Push to GitHub
-
-From the project root:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: NuConnect CRM"
-```
-
-Create a new repository on [GitHub](https://github.com/new) (do **not** add a README or .gitignore there). Then:
-
-```bash
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-git branch -M main
-git push -u origin main
-```
-
-Replace `YOUR_USERNAME` and `YOUR_REPO_NAME` with your GitHub username and repo name. After pushing, connect the repo in Render to deploy.
 
 ---
 
