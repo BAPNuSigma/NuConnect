@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { firms, semesters, invites, speakerLogs } from "@/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, desc, asc } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
-import { getLastSpokeByOrganization } from "@/lib/last-spoke";
 import { sendEmail } from "@/lib/email";
 import { getInviteTemplate, buildInviteEmail } from "@/lib/invite-email";
 import { getTestModeSettings } from "@/lib/test-mode";
@@ -55,15 +54,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invite already sent for this firm/semester" }, { status: 409 });
   }
 
-  // Enforce 1-year rule: do not send to firms whose organization spoke within the last year
-  // (same computation as batch send + Invites page; keyed by organizationId so other
-  // contacts at the same company can't bypass it).
-  const lastByOrg = await getLastSpokeByOrganization(db);
-  const lastSpokeRow = firm.organizationId != null ? lastByOrg.get(firm.organizationId) : undefined;
+  // Enforce 1-year rule: do not send to firms that spoke within the last year (same as batch + Invites page)
+  const lastSpokeRow = await db
+    .select({ year: semesters.year, term: semesters.term })
+    .from(speakerLogs)
+    .innerJoin(semesters, eq(speakerLogs.semesterId, semesters.id))
+    .where(and(eq(speakerLogs.firmId, firmId), eq(speakerLogs.outcome, "spoke")))
+    .orderBy(desc(semesters.year), asc(semesters.term))
+    .limit(1)
+    .then((rows) => rows[0]);
   if (lastSpokeRow) {
     const eligible = isEligibleForSemester(
       lastSpokeRow.year,
-      lastSpokeRow.term,
+      lastSpokeRow.term as Term,
       semester.year,
       semester.term as Term
     );

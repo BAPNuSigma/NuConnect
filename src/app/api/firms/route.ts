@@ -3,7 +3,6 @@ import { db } from "@/db";
 import { firms, invites, semesters, speakerLogs, schedulingSubmissions, events } from "@/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { z } from "zod";
-import { resolveOrganizationId } from "@/lib/organizations";
 
 const firmFields = z.object({
   name: z.string().min(1),
@@ -19,7 +18,6 @@ const firmFields = z.object({
   location: z.string().optional(),
   alumniConnection: z.string().optional(),
   personalizedNote: z.string().optional(),
-  source: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -72,34 +70,28 @@ export async function GET() {
     return a.label.toLowerCase() === "fall" && b.label.toLowerCase() !== "fall";
   }
 
-  /**
-   * Per organization: show same last invited / last spoke for all contacts at that company.
-   * Keyed by organizationId (not name) so contacts don't need identical name spelling/casing
-   * to be grouped together correctly.
-   */
-  const orgKey = (f: { id: number; organizationId: number | null }) =>
-    f.organizationId != null ? `org:${f.organizationId}` : `firm:${f.id}`;
-  const lastInvitedByOrg = new Map<string, { year: number; label: string }>();
-  const lastSpokeByOrg = new Map<string, { year: number; label: string }>();
+  /** Per firm name: show same last invited / last spoke for all contacts (e.g. Withem). */
+  const lastInvitedByFirmName = new Map<string, { year: number; label: string }>();
+  const lastSpokeByFirmName = new Map<string, { year: number; label: string }>();
   for (const f of list) {
-    const key = orgKey(f);
+    const nameKey = (f.name ?? "").trim() || String(f.id);
     const inv = lastInvitedByFirmId.get(f.id);
     const sp = lastSpokeByFirmId.get(f.id);
-    if (inv && isNewer(inv, lastInvitedByOrg.get(key))) {
-      lastInvitedByOrg.set(key, inv);
+    if (inv && isNewer(inv, lastInvitedByFirmName.get(nameKey))) {
+      lastInvitedByFirmName.set(nameKey, inv);
     }
-    if (sp && isNewer(sp, lastSpokeByOrg.get(key))) {
-      lastSpokeByOrg.set(key, sp);
+    if (sp && isNewer(sp, lastSpokeByFirmName.get(nameKey))) {
+      lastSpokeByFirmName.set(nameKey, sp);
     }
   }
 
   const result = list.map((f) => {
-    const key = orgKey(f);
+    const nameKey = (f.name ?? "").trim() || String(f.id);
     return {
       ...f,
-      lastAcademicYearInvited: lastInvitedByOrg.get(key)?.year ?? null,
-      lastAcademicYearSpoke: lastSpokeByOrg.get(key)?.year ?? null,
-      lastSemesterSpoke: lastSpokeByOrg.get(key)?.label ?? null,
+      lastAcademicYearInvited: lastInvitedByFirmName.get(nameKey)?.year ?? null,
+      lastAcademicYearSpoke: lastSpokeByFirmName.get(nameKey)?.year ?? null,
+      lastSemesterSpoke: lastSpokeByFirmName.get(nameKey)?.label ?? null,
     };
   });
 
@@ -117,10 +109,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
-  const organizationId = await resolveOrganizationId(db, d.name);
   const [row] = await db.insert(firms).values({
     name: d.name,
-    organizationId,
     discipline: d.discipline || null,
     contactFirstName: d.contactFirstName || null,
     contactLastName: d.contactLastName || null,
@@ -133,7 +123,6 @@ export async function POST(request: Request) {
     location: d.location || null,
     alumniConnection: d.alumniConnection || null,
     personalizedNote: d.personalizedNote || null,
-    source: d.source || null,
     notes: d.notes || null,
     updatedAt: new Date(),
   }).returning();
@@ -149,10 +138,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
-  const organizationId = d.name !== undefined ? await resolveOrganizationId(db, d.name) : undefined;
   const [row] = await db.update(firms).set({
     ...(d.name !== undefined && { name: d.name }),
-    ...(organizationId !== undefined && { organizationId }),
     ...(d.discipline !== undefined && { discipline: d.discipline || null }),
     ...(d.contactFirstName !== undefined && { contactFirstName: d.contactFirstName || null }),
     ...(d.contactLastName !== undefined && { contactLastName: d.contactLastName || null }),
@@ -165,7 +152,6 @@ export async function PATCH(request: NextRequest) {
     ...(d.location !== undefined && { location: d.location || null }),
     ...(d.alumniConnection !== undefined && { alumniConnection: d.alumniConnection || null }),
     ...(d.personalizedNote !== undefined && { personalizedNote: d.personalizedNote || null }),
-    ...(d.source !== undefined && { source: d.source || null }),
     ...(d.notes !== undefined && { notes: d.notes || null }),
     updatedAt: new Date(),
   }).where(eq(firms.id, parseInt(id, 10))).returning();

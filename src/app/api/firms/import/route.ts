@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { z } from "zod";
 import { db } from "@/db";
 import { firms } from "@/db/schema";
-import { resolveOrganizationId, normalizeOrgName } from "@/lib/organizations";
-
-const emailSchema = z.string().trim().email();
-
-/** Key used to detect duplicate leads: same company + same email, or same company + same person name. */
-function dedupeKey(name: string, email: string | null, firstName: string | null, lastName: string | null): string {
-  const nameKey = normalizeOrgName(name);
-  const personKey = email
-    ? email.trim().toLowerCase()
-    : `${(firstName ?? "").trim().toLowerCase()}|${(lastName ?? "").trim().toLowerCase()}`;
-  return `${nameKey}::${personKey}`;
-}
 
 function findCol(headers: string[], keywords: string[]): number {
   for (let c = 0; c < headers.length; c++) {
@@ -97,7 +84,6 @@ export async function POST(request: Request) {
   let locationCol: number;
   let alumniCol: number;
   let noteCol: number;
-  let sourceCol: number;
 
   if (exactMatch) {
     nameCol = 1;
@@ -112,7 +98,6 @@ export async function POST(request: Request) {
     locationCol = 9;
     alumniCol = 10;
     noteCol = 11;
-    sourceCol = findCol(headers, ["source"]);
   } else {
     const col = (keywords: string[]) => findCol(headers, keywords);
     nameCol = findCol(headers, ["firm name"]); // prefer exact "firm name" column
@@ -135,23 +120,10 @@ export async function POST(request: Request) {
     locationCol = col(["location"]);
     alumniCol = col(["alumni connection", "alumni"]);
     noteCol = col(["personalization notes", "personalized note", "personalized", "notes", "note"]);
-    sourceCol = col(["source"]);
   }
-
-  const existingFirms = await db.select({
-    name: firms.name,
-    contactEmail: firms.contactEmail,
-    contactFirstName: firms.contactFirstName,
-    contactLastName: firms.contactLastName,
-  }).from(firms);
-  const seenKeys = new Set(
-    existingFirms.map((f) => dedupeKey(f.name, f.contactEmail, f.contactFirstName, f.contactLastName))
-  );
 
   let inserted = 0;
   let skipped = 0;
-  let duplicates = 0;
-  let invalidEmails = 0;
 
   try {
     for (let i = 1; i < rows.length; i++) {
@@ -166,6 +138,7 @@ export async function POST(request: Request) {
       const discipline = safeStr(getCell(row, disciplineCol)) || null;
       const contactFirstName = safeStr(getCell(row, contactFirstCol)) || null;
       const contactLastName = safeStr(getCell(row, contactLastCol)) || null;
+      const contactEmail = safeStr(getCell(row, emailCol)) || null;
       const title = safeStr(getCell(row, titleCol)) || null;
       const practiceArea = safeStr(getCell(row, practiceAreaCol)) || null;
       const firmType = safeStr(getCell(row, firmTypeCol)) || null;
@@ -174,35 +147,13 @@ export async function POST(request: Request) {
       const alumniConnection = safeStr(getCell(row, alumniCol)) || null;
       const personalizedNote = safeStr(getCell(row, noteCol)) || null;
       const notes = safeStr(getCell(row, noteCol)) || null;
-      const source = safeStr(getCell(row, sourceCol)) || "Excel Import";
-
-      const rawEmail = safeStr(getCell(row, emailCol));
-      let contactEmail: string | null = null;
-      if (rawEmail) {
-        const parsedEmail = emailSchema.safeParse(rawEmail);
-        if (parsedEmail.success) {
-          contactEmail = parsedEmail.data;
-        } else {
-          invalidEmails++; // keep the lead, drop the bad address so it doesn't bounce at send time
-        }
-      }
-
-      const key = dedupeKey(name, contactEmail, contactFirstName, contactLastName);
-      if (seenKeys.has(key)) {
-        duplicates++;
-        continue;
-      }
-      seenKeys.add(key);
-
-      const organizationId = await resolveOrganizationId(db, name);
 
       await db.insert(firms).values({
         name,
-        organizationId,
         discipline,
         contactFirstName,
         contactLastName,
-        contactEmail,
+        contactEmail: contactEmail || null,
         title,
         practiceArea,
         firmType,
@@ -210,7 +161,6 @@ export async function POST(request: Request) {
         location,
         alumniConnection,
         personalizedNote,
-        source,
         notes,
         updatedAt: now,
       });
@@ -222,5 +172,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Import failed: ${message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, inserted, skipped, duplicates, invalidEmails });
+  return NextResponse.json({ ok: true, inserted, skipped });
 }
