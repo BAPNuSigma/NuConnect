@@ -19,24 +19,10 @@ export const semesters = sqliteTable("semesters", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
-/**
- * Organizations (companies). One row per company, regardless of how many contacts
- * (firms rows) exist there. Eligibility (the 1-year rule) is computed per organization
- * so multiple contacts at the same company can't bypass it.
- */
-export const organizations = sqliteTable("organizations", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  nameKey: text("name_key").notNull().unique(), // trimmed+lowercased name, used to find-or-create
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
-});
-
-/** Firms (contacts/leads) that can be invited to speak */
+/** Firms (companies) that can be invited to speak */
 export const firms = sqliteTable("firms", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(), // organization name
-  organizationId: integer("organization_id").references(() => organizations.id),
   discipline: text("discipline"),
   contactFirstName: text("contact_first_name"),
   contactLastName: text("contact_last_name"),
@@ -49,7 +35,6 @@ export const firms = sqliteTable("firms", {
   location: text("location"),
   alumniConnection: text("alumni_connection"),
   personalizedNote: text("personalized_note"),
-  source: text("source"), // lead channel, e.g. "Alumni LinkedIn", "Excel Import", "Career Fair"
   notes: text("notes"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
@@ -106,12 +91,7 @@ export const invites = sqliteTable("invites", {
   replied: integer("replied", { mode: "boolean" }).default(false), // tied to form responses
 });
 
-export const organizationsRelations = relations(organizations, ({ many }) => ({
-  firms: many(firms),
-}));
-
-export const firmsRelations = relations(firms, ({ one, many }) => ({
-  organization: one(organizations, { fields: [firms.organizationId], references: [organizations.id] }),
+export const firmsRelations = relations(firms, ({ many }) => ({
   events: many(events),
   speakerLogs: many(speakerLogs),
   invites: many(invites),
