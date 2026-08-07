@@ -292,7 +292,15 @@ export default function FirmsPage() {
       formData.append("file", file);
       const res = await fetch("/api/firms/import", { method: "POST", body: formData });
       const text = await res.text();
-      let data: { error?: string; headersFound?: string[]; inserted?: number; updated?: number; skipped?: number } = {};
+      let data: {
+        error?: string;
+        headersFound?: string[];
+        inserted?: number;
+        updated?: number;
+        skipped?: number;
+        duplicates?: number;
+        invalidEmails?: number;
+      } = {};
       if (text.trim() && !text.trimStart().startsWith("<")) {
         try {
           data = JSON.parse(text);
@@ -306,7 +314,10 @@ export default function FirmsPage() {
         alert(msg + extra);
         return;
       }
-      alert(`Import complete. Inserted: ${data.inserted ?? 0}, Skipped (empty name): ${data.skipped ?? 0}`);
+      alert(
+        `Import complete. Inserted: ${data.inserted ?? 0}, Skipped (empty name): ${data.skipped ?? 0}, ` +
+        `Duplicates skipped: ${data.duplicates ?? 0}, Invalid emails dropped (lead kept): ${data.invalidEmails ?? 0}`
+      );
       fetchFirms();
     } finally {
       setImporting(false);

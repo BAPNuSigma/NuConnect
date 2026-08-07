@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { events, semesters, firms, invites, speakerLogs } from "@/db/schema";
+import { semesters, firms, invites, speakerLogs } from "@/db/schema";
 import { eq, desc, and, count } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
+import { getLastSpokeByOrganization } from "@/lib/last-spoke";
 import { sendEmail } from "@/lib/email";
 import { getInviteTemplate, buildInviteEmail } from "@/lib/invite-email";
 import { getTestModeSettings } from "@/lib/test-mode";
@@ -73,36 +74,19 @@ async function runBatch(request: Request, method: "GET" | "POST") {
   });
   const sentSet = new Set(sentInvites.map((i) => i.firmId));
 
-  const lastEventByFirm = await db
-    .select({
-      firmId: events.firmId,
-      year: semesters.year,
-      term: semesters.term,
-      label: semesters.label,
-    })
-    .from(events)
-    .innerJoin(semesters, eq(events.semesterId, semesters.id))
-    .orderBy(desc(events.createdAt));
-
-  const lastByFirm = new Map<number, { year: number; term: string; label: string }>();
-  for (const row of lastEventByFirm) {
-    if (!lastByFirm.has(row.firmId)) {
-      lastByFirm.set(row.firmId, {
-        year: row.year,
-        term: row.term,
-        label: row.label,
-      });
-    }
-  }
+  // Keyed by organizationId (not firm.id) so every contact at the same company shares
+  // one eligibility state - otherwise a second contact row at an ineligible company would
+  // slip past the 1-year rule.
+  const lastByOrg = await getLastSpokeByOrganization(db);
 
   const targetYear = targetSemester.year;
   const targetTerm = targetSemester.term as Term;
 
   const pending = allFirms.filter((firm) => {
     if (sentSet.has(firm.id)) return false;
-    const last = lastByFirm.get(firm.id);
+    const last = firm.organizationId != null ? lastByOrg.get(firm.organizationId) : undefined;
     return last
-      ? isEligibleForSemester(last.year, last.term as Term, targetYear, targetTerm)
+      ? isEligibleForSemester(last.year, last.term, targetYear, targetTerm)
       : true;
   });
 
@@ -113,9 +97,11 @@ async function runBatch(request: Request, method: "GET" | "POST") {
   const errors: { firmId: number; firmName: string; error: string }[] = [];
 
   for (const firm of pending) {
+    // No-email firms are skipped WITHOUT recording an invite row, so they stay "pending"
+    // and get retried on the next batch run once an email is backfilled - not silently
+    // marked invited forever.
     let to: string | null = firm.contactEmail?.trim() ?? null;
     if (!to && !testMode) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
       skippedNoEmail += 1;
       continue;
     }
@@ -128,13 +114,11 @@ async function runBatch(request: Request, method: "GET" | "POST") {
     const subject = testMode ? `[TEST] ${rawSubject}` : rawSubject;
     if (testMode && testModeEmail) to = testModeEmail;
     else if (testMode && !to) {
-      // Test mode, no firm email: record invite but don't send
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      // Test mode, no firm email: nothing to send, don't record an invite
       skippedNoEmail += 1;
       continue;
     }
     if (!to) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
       skippedNoEmail += 1;
       continue;
     }

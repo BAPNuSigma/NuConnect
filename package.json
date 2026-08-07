@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:backfill-orgs": "node scripts/backfill-organizations.mjs",
     "db:validate:persistence": "node scripts/validate-libsql-persistence.mjs"
   },
   "dependencies": {
