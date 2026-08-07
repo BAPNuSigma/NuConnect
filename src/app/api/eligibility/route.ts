@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { semesters, firms, invites, speakerLogs } from "@/db/schema";
-import { eq, desc, asc, and, count } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
+import { getLastSpokeByOrganization } from "@/lib/last-spoke";
 
 /**
  * GET ?semesterId=1
@@ -47,53 +48,12 @@ export async function GET(request: Request) {
   });
   const sentSet = new Set(sentInvites.map((i) => i.firmId));
 
-  // Last spoke from speaker_logs (outcome = 'spoke') so Invites page matches Speaker logs & Firms
-  const lastSpokeRows = await db
-    .select({
-      firmId: speakerLogs.firmId,
-      year: semesters.year,
-      term: semesters.term,
-      label: semesters.label,
-    })
-    .from(speakerLogs)
-    .innerJoin(semesters, eq(speakerLogs.semesterId, semesters.id))
-    .where(eq(speakerLogs.outcome, "spoke"))
-    .orderBy(desc(semesters.year), asc(semesters.term)); // latest semester first (Fall after Spring)
-
-  const lastByFirmId = new Map<number, { year: number; term: string; label: string }>();
-  for (const row of lastSpokeRows) {
-    if (!lastByFirmId.has(row.firmId)) {
-      lastByFirmId.set(row.firmId, {
-        year: row.year,
-        term: row.term,
-        label: row.label,
-      });
-    }
-  }
-
-  /** Prefer later semester: Fall > Spring for same year. */
-  function isNewer(
-    a: { year: number; term: string; label: string },
-    b: { year: number; term: string; label: string } | undefined
-  ): boolean {
-    if (!b) return true;
-    if (a.year !== b.year) return a.year > b.year;
-    return a.term.toLowerCase() === "fall" && b.term.toLowerCase() !== "fall";
-  }
-
-  /** Per firm name: same last spoke for all contacts (matches Firms page). */
-  const lastByFirmName = new Map<string, { year: number; term: string; label: string }>();
-  for (const firm of allFirms) {
-    const last = lastByFirmId.get(firm.id);
-    if (!last) continue;
-    const nameKey = (firm.name ?? "").trim() || String(firm.id);
-    const cur = lastByFirmName.get(nameKey);
-    if (isNewer(last, cur)) lastByFirmName.set(nameKey, last);
-  }
+  // Keyed by organizationId so every contact at the same company shares one eligibility
+  // state (matches send-invites-batch and send-invite).
+  const lastByOrg = await getLastSpokeByOrganization(db);
 
   const result = allFirms.map((firm) => {
-    const nameKey = (firm.name ?? "").trim() || String(firm.id);
-    const last = lastByFirmName.get(nameKey);
+    const last = firm.organizationId != null ? lastByOrg.get(firm.organizationId) : undefined;
     const eligibleByRule = last
       ? isEligibleForSemester(last.year, last.term as Term, targetYear, targetTerm)
       : true;
