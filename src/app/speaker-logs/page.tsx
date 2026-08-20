@@ -26,6 +26,13 @@ function speakerName(firm: Firm | null | undefined): string {
   return firm.contactName ?? "—";
 }
 
+function responseValue(notes: string | null, key: string): string | null {
+  if (!notes) return null;
+  const prefix = `${key}:`;
+  const line = notes.split("\n").find((item) => item.startsWith(prefix));
+  return line?.slice(prefix.length).trim() || null;
+}
+
 export default function SpeakerLogsPage() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
@@ -584,12 +591,12 @@ export default function SpeakerLogsPage() {
               {paginatedLogs.map((log) => (
                 <tr key={log.id}>
                   <td className="font-medium text-white">{log.firm?.name ?? "—"}</td>
-                  <td>{log.firm?.discipline ?? "—"}</td>
-                  <td>—</td>
+                  <td>{responseValue(log.notes, "discipline") ?? log.firm?.discipline ?? "—"}</td>
+                  <td>{responseValue(log.notes, "presentationTopic") ?? "—"}</td>
                   <td>{log.logDate}</td>
                   <td>{log.semester?.year ?? "—"}</td>
                   <td>{log.semester?.label ?? "—"}</td>
-                  <td>{speakerName(log.firm)}</td>
+                  <td>{responseValue(log.notes, "primaryContactName") ?? speakerName(log.firm)}</td>
                   <td>
                     <select
                       className="input py-1 text-sm w-28"

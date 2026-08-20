@@ -484,7 +484,20 @@ export default function FirmsPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="sm:col-span-2">
                   <span className="block text-sm text-zinc-500 mb-1">Organization / Name *</span>
-                  <input className="input" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
+                  <input
+                    className="input"
+                    list="existing-firm-names"
+                    autoComplete="off"
+                    value={form.name}
+                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Start typing to see existing firms"
+                    required
+                  />
+                  <datalist id="existing-firm-names">
+                    {Array.from(new Set(firms.map((firm) => firm.name.trim()).filter(Boolean)))
+                      .sort((a, b) => a.localeCompare(b))
+                      .map((name) => <option key={name.toLocaleLowerCase()} value={name} />)}
+                  </datalist>
                 </label>
                 <label>
                   <span className="block text-sm text-zinc-500 mb-1">Discipline</span>
