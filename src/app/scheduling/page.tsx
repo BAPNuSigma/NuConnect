@@ -13,6 +13,20 @@ type Submission = {
   semester: { id: number; label: string } | null;
 };
 
+const hiddenResponseKeys = new Set(["firmName", "company", "firm", "semester", "semesterLabel"]);
+
+function getResponses(rawPayload: string | null): Array<[string, string]> {
+  if (!rawPayload) return [];
+  try {
+    const payload = JSON.parse(rawPayload) as Record<string, unknown>;
+    return Object.entries(payload)
+      .filter(([key]) => !hiddenResponseKeys.has(key))
+      .map(([key, value]) => [key, Array.isArray(value) ? value.join(", ") : value == null ? "—" : String(value)]);
+  } catch {
+    return [["Response", rawPayload]];
+  }
+}
+
 export default function SchedulingPage() {
   const [list, setList] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +92,7 @@ export default function SchedulingPage() {
                   <th>Firm</th>
                   <th>Semester</th>
                   <th>Submitted at</th>
-                  <th>Raw</th>
+                  <th>Form responses</th>
                 </tr>
               </thead>
               <tbody>
@@ -89,8 +103,17 @@ export default function SchedulingPage() {
                     </td>
                     <td>{row.semester?.label ?? "—"}</td>
                     <td>{row.submittedAt}</td>
-                    <td className="max-w-[200px] truncate text-xs">
-                      {row.rawPayload ? "✓" : "—"}
+                    <td className="min-w-[280px] text-sm">
+                      {getResponses(row.rawPayload).length > 0 ? (
+                        <dl className="space-y-1">
+                          {getResponses(row.rawPayload).map(([question, answer]) => (
+                            <div key={question}>
+                              <dt className="inline font-medium text-zinc-300">{question}: </dt>
+                              <dd className="inline whitespace-pre-wrap text-zinc-400">{answer}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : "—"}
                     </td>
                   </tr>
                 ))}

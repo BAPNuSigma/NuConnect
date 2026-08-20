@@ -26,12 +26,20 @@ function speakerName(firm: Firm | null | undefined): string {
   return firm.contactName ?? "—";
 }
 
+function responseValue(notes: string | null, key: string): string | null {
+  if (!notes) return null;
+  const prefix = `${key}:`;
+  const line = notes.split("\n").find((item) => item.startsWith(prefix));
+  return line?.slice(prefix.length).trim() || null;
+}
+
 export default function SpeakerLogsPage() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedFirmName, setSelectedFirmName] = useState("");
   const [form, setForm] = useState({
     firmId: 0,
     semesterId: 0,
@@ -160,6 +168,10 @@ export default function SpeakerLogsPage() {
     }
     return Array.from(byName.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [firms]);
+  const speakersForSelectedFirm = React.useMemo(() => {
+    const key = selectedFirmName.trim().toLocaleLowerCase();
+    return firms.filter((firm) => firm.name.trim().toLocaleLowerCase() === key);
+  }, [firms, selectedFirmName]);
   const fetchSemesters = async () => {
     const res = await fetch("/api/semesters");
     const data = await safeJson(res);
@@ -196,6 +208,7 @@ export default function SpeakerLogsPage() {
       thankYouSent: false,
       notes: "",
     });
+    setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
     fetchLogs();
   };
 
@@ -351,6 +364,7 @@ export default function SpeakerLogsPage() {
                 thankYouSent: false,
                 notes: "",
               });
+              setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
               setShowForm(true);
             }}
             className="btn-primary"
@@ -484,13 +498,35 @@ export default function SpeakerLogsPage() {
               <span className="block text-sm text-zinc-500 mb-1">Firm</span>
               <select
                 className="input"
+                value={selectedFirmName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const firstContact = firms.find((firm) => firm.name === name);
+                  setSelectedFirmName(name);
+                  setForm((previous) => ({ ...previous, firmId: firstContact?.id ?? 0 }));
+                }}
+                required
+              >
+                <option value="">Select…</option>
+                {firmsByUniqueName.map((f) => (
+                  <option key={f.id} value={f.name}>{f.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="block text-sm text-zinc-500 mb-1">Speaker</span>
+              <select
+                className="input"
                 value={form.firmId}
-                onChange={(e) => setForm((p) => ({ ...p, firmId: Number(e.target.value) }))}
+                onChange={(e) => setForm((previous) => ({ ...previous, firmId: Number(e.target.value) }))}
+                disabled={!selectedFirmName}
                 required
               >
                 <option value={0}>Select…</option>
-                {firmsByUniqueName.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                {speakersForSelectedFirm.map((firm) => (
+                  <option key={firm.id} value={firm.id}>
+                    {speakerName(firm) === "—" ? "Contact name unavailable" : speakerName(firm)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -584,12 +620,12 @@ export default function SpeakerLogsPage() {
               {paginatedLogs.map((log) => (
                 <tr key={log.id}>
                   <td className="font-medium text-white">{log.firm?.name ?? "—"}</td>
-                  <td>{log.firm?.discipline ?? "—"}</td>
-                  <td>—</td>
+                  <td>{responseValue(log.notes, "discipline") ?? log.firm?.discipline ?? "—"}</td>
+                  <td>{responseValue(log.notes, "presentationTopic") ?? "—"}</td>
                   <td>{log.logDate}</td>
                   <td>{log.semester?.year ?? "—"}</td>
                   <td>{log.semester?.label ?? "—"}</td>
-                  <td>{speakerName(log.firm)}</td>
+                  <td>{responseValue(log.notes, "primaryContactName") ?? speakerName(log.firm)}</td>
                   <td>
                     <select
                       className="input py-1 text-sm w-28"

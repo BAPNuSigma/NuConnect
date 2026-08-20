@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { semesters, firms, invites, speakerLogs } from "@/db/schema";
-import { eq, desc, asc, and, count } from "drizzle-orm";
+import { eq, desc, asc, and, count, inArray } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
 
 /**
@@ -33,11 +33,11 @@ export async function GET(request: Request) {
   let remainingSlots: number | null = null;
   let semesterClosed = false;
   if (cap !== null) {
-    const [{ value: spokeCount }] = await db
+    const [{ value: filledCount }] = await db
       .select({ value: count() })
       .from(speakerLogs)
-      .where(and(eq(speakerLogs.semesterId, semesterId), eq(speakerLogs.outcome, "spoke")));
-    remainingSlots = Math.max(0, cap - spokeCount);
+      .where(and(eq(speakerLogs.semesterId, semesterId), inArray(speakerLogs.outcome, ["confirm", "spoke"])));
+    remainingSlots = Math.max(0, cap - filledCount);
     semesterClosed = remainingSlots === 0;
   }
 
