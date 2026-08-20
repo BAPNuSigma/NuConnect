@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { schedulingSubmissions, firms, semesters } from "@/db/schema";
-import { like } from "drizzle-orm";
+import { schedulingSubmissions, speakerLogs, events, firms, semesters } from "@/db/schema";
+import { and, asc, eq, like, sql } from "drizzle-orm";
 
 /**
  * POST: receive Google Forms submission.
@@ -10,6 +10,26 @@ import { like } from "drizzle-orm";
  * We store raw payload and optionally link to firm/semester by name.
  */
 const secret = process.env.GOOGLE_FORMS_WEBHOOK_SECRET;
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function responseNotes(body: Record<string, unknown>): string | null {
+  const ignored = new Set(["firmName", "company", "firm", "semester", "semesterLabel", "preferredDate"]);
+  const lines = Object.entries(body)
+    .filter(([key, value]) => !ignored.has(key) && value != null && String(value).trim())
+    .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : String(value)}`);
+  return lines.length ? lines.join("\n") : null;
+}
+
+function responseDate(value: unknown, fallback: string): string {
+  const raw = stringValue(value);
+  if (!raw) return fallback;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString().slice(0, 10);
+}
 
 export async function POST(request: Request) {
   if (secret) {
@@ -25,36 +45,87 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const firmName = typeof body.firmName === "string" ? body.firmName : (body.company ?? body.firm) as string | undefined;
-  const semesterLabel = typeof body.semester === "string" ? body.semester : (body.semesterLabel as string | undefined);
+  const firmName = stringValue(body.firmName) ?? stringValue(body.company) ?? stringValue(body.firm);
+  const semesterLabel = stringValue(body.semester) ?? stringValue(body.semesterLabel);
 
   let firmId: number | null = null;
   let semesterId: number | null = null;
 
   if (firmName) {
     const match = await db.query.firms.findFirst({
+      where: sql`lower(trim(${firms.name})) = lower(${firmName})`,
+      columns: { id: true },
+      orderBy: [asc(firms.id)],
+    });
+    const fallback = match ?? await db.query.firms.findFirst({
       where: like(firms.name, `%${firmName}%`),
       columns: { id: true },
+      orderBy: [asc(firms.id)],
     });
-    if (match) firmId = match.id;
+    if (fallback) firmId = fallback.id;
   }
   if (semesterLabel) {
     const match = await db.query.semesters.findFirst({
-      where: like(semesters.label, `%${semesterLabel}%`),
+      where: sql`lower(trim(${semesters.label})) = lower(${semesterLabel})`,
       columns: { id: true },
     });
     if (match) semesterId = match.id;
   }
 
-  const [row] = await db.insert(schedulingSubmissions).values({
-    firmId,
-    firmName: firmName ?? null,
-    semesterId,
-    submittedAt: new Date().toISOString(),
-    rawPayload: JSON.stringify(body),
-  }).returning();
+  const submittedAt = new Date().toISOString();
+  const logDate = responseDate(body.preferredDate, submittedAt.slice(0, 10));
+  const notes = responseNotes(body);
 
-  return NextResponse.json({ ok: true, id: row?.id });
+  const result = await db.transaction(async (tx) => {
+    const [submission] = await tx.insert(schedulingSubmissions).values({
+      firmId,
+      firmName: firmName ?? null,
+      semesterId,
+      submittedAt,
+      rawPayload: JSON.stringify(body),
+    }).returning();
+
+    let speakerLogId: number | null = null;
+    if (firmId !== null && semesterId !== null) {
+      let event = await tx.query.events.findFirst({
+        where: and(eq(events.firmId, firmId), eq(events.semesterId, semesterId)),
+      });
+      if (!event) {
+        [event] = await tx.insert(events).values({ firmId, semesterId, eventDate: logDate }).returning();
+      } else if (logDate && event.eventDate !== logDate) {
+        [event] = await tx.update(events).set({ eventDate: logDate }).where(eq(events.id, event.id)).returning();
+      }
+
+      const existing = await tx.query.speakerLogs.findFirst({
+        where: and(eq(speakerLogs.firmId, firmId), eq(speakerLogs.semesterId, semesterId)),
+        orderBy: [asc(speakerLogs.id)],
+      });
+      if (existing) {
+        const [updated] = await tx.update(speakerLogs).set({
+          eventId: event?.id ?? existing.eventId,
+          logDate,
+          notes,
+          updatedAt: new Date(),
+        }).where(eq(speakerLogs.id, existing.id)).returning();
+        speakerLogId = updated?.id ?? existing.id;
+      } else {
+        const [created] = await tx.insert(speakerLogs).values({
+          firmId,
+          semesterId,
+          eventId: event?.id ?? null,
+          logDate,
+          outcome: "confirm",
+          notes,
+          updatedAt: new Date(),
+        }).returning();
+        speakerLogId = created?.id ?? null;
+      }
+    }
+
+    return { submissionId: submission?.id, speakerLogId };
+  });
+
+  return NextResponse.json({ ok: true, id: result.submissionId, speakerLogId: result.speakerLogId });
 }
 
 export async function GET() {
