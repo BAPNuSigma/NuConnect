@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, semesters, firms, invites, speakerLogs } from "@/db/schema";
-import { eq, desc, and, count } from "drizzle-orm";
+import { eq, desc, and, count, inArray } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
 import { sendEmail } from "@/lib/email";
 import { getInviteTemplate, buildInviteEmail } from "@/lib/invite-email";
@@ -57,11 +57,11 @@ async function runBatch(request: Request, method: "GET" | "POST") {
 
   const cap = targetSemester.speakerCapacity ?? null;
   if (cap !== null) {
-    const [{ value: spokeCount }] = await db
+    const [{ value: filledCount }] = await db
       .select({ value: count() })
       .from(speakerLogs)
-      .where(and(eq(speakerLogs.semesterId, semesterId), eq(speakerLogs.outcome, "spoke")));
-    const remaining = Math.max(0, cap - spokeCount);
+      .where(and(eq(speakerLogs.semesterId, semesterId), inArray(speakerLogs.outcome, ["confirm", "spoke"])));
+    const remaining = Math.max(0, cap - filledCount);
     if (remaining === 0) {
       return NextResponse.json({ error: "This semester is full. Recruitment is closed." }, { status: 400 });
     }

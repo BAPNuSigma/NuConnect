@@ -39,6 +39,7 @@ export default function SpeakerLogsPage() {
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedFirmName, setSelectedFirmName] = useState("");
   const [form, setForm] = useState({
     firmId: 0,
     semesterId: 0,
@@ -167,6 +168,10 @@ export default function SpeakerLogsPage() {
     }
     return Array.from(byName.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [firms]);
+  const speakersForSelectedFirm = React.useMemo(() => {
+    const key = selectedFirmName.trim().toLocaleLowerCase();
+    return firms.filter((firm) => firm.name.trim().toLocaleLowerCase() === key);
+  }, [firms, selectedFirmName]);
   const fetchSemesters = async () => {
     const res = await fetch("/api/semesters");
     const data = await safeJson(res);
@@ -203,6 +208,7 @@ export default function SpeakerLogsPage() {
       thankYouSent: false,
       notes: "",
     });
+    setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
     fetchLogs();
   };
 
@@ -358,6 +364,7 @@ export default function SpeakerLogsPage() {
                 thankYouSent: false,
                 notes: "",
               });
+              setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
               setShowForm(true);
             }}
             className="btn-primary"
@@ -491,13 +498,35 @@ export default function SpeakerLogsPage() {
               <span className="block text-sm text-zinc-500 mb-1">Firm</span>
               <select
                 className="input"
+                value={selectedFirmName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const firstContact = firms.find((firm) => firm.name === name);
+                  setSelectedFirmName(name);
+                  setForm((previous) => ({ ...previous, firmId: firstContact?.id ?? 0 }));
+                }}
+                required
+              >
+                <option value="">Select…</option>
+                {firmsByUniqueName.map((f) => (
+                  <option key={f.id} value={f.name}>{f.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="block text-sm text-zinc-500 mb-1">Speaker</span>
+              <select
+                className="input"
                 value={form.firmId}
-                onChange={(e) => setForm((p) => ({ ...p, firmId: Number(e.target.value) }))}
+                onChange={(e) => setForm((previous) => ({ ...previous, firmId: Number(e.target.value) }))}
+                disabled={!selectedFirmName}
                 required
               >
                 <option value={0}>Select…</option>
-                {firmsByUniqueName.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                {speakersForSelectedFirm.map((firm) => (
+                  <option key={firm.id} value={firm.id}>
+                    {speakerName(firm) === "—" ? "Contact name unavailable" : speakerName(firm)}
+                  </option>
                 ))}
               </select>
             </label>

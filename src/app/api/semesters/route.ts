@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { semesters, speakerLogs } from "@/db/schema";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 const createBody = z.object({
@@ -23,26 +23,26 @@ function label(year: number, term: Term): string {
   return `${cap} ${year}`;
 }
 
-/** Count of speaker_logs with outcome 'spoke' per semester (filled slots) */
-async function getSpokeCountsBySemester(): Promise<Map<number, number>> {
+/** Confirmed and completed speakers both occupy a semester slot. */
+async function getFilledCountsBySemester(): Promise<Map<number, number>> {
   const rows = await db
     .select({
       semesterId: speakerLogs.semesterId,
-      spokeCount: count(),
+      filledCount: count(),
     })
     .from(speakerLogs)
-    .where(eq(speakerLogs.outcome, "spoke"))
+    .where(inArray(speakerLogs.outcome, ["confirm", "spoke"]))
     .groupBy(speakerLogs.semesterId);
-  return new Map(rows.map((r) => [r.semesterId, r.spokeCount]));
+  return new Map(rows.map((r) => [r.semesterId, r.filledCount]));
 }
 
 export async function GET() {
   const list = await db.query.semesters.findMany({
     orderBy: [desc(semesters.year), desc(semesters.term)],
   });
-  const spokeCounts = await getSpokeCountsBySemester();
+  const filledCounts = await getFilledCountsBySemester();
   const result = list.map((s) => {
-    const filled = spokeCounts.get(s.id) ?? 0;
+    const filled = filledCounts.get(s.id) ?? 0;
     const cap = s.speakerCapacity ?? null;
     const remaining = cap === null ? null : Math.max(0, cap - filled);
     return {
