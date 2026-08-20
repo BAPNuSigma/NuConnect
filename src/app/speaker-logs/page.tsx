@@ -57,6 +57,7 @@ export default function SpeakerLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSemesterId, setFilterSemesterId] = useState<string>("");
   const [filterOutcome, setFilterOutcome] = useState("");
+  const [sort, setSort] = useState<{ key: "firm" | "discipline" | "topic" | "date" | "year" | "semester" | "speaker" | "outcome" | "notes"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const filteredLogs = React.useMemo(() => {
@@ -83,8 +84,32 @@ export default function SpeakerLogsPage() {
     if (filterOutcome) {
       list = list.filter((log) => (log.outcome ?? "") === filterOutcome);
     }
-    return list;
-  }, [logs, searchQuery, filterSemesterId, filterOutcome]);
+    const value = (log: Log): string | number => {
+      switch (sort.key) {
+        case "firm": return log.firm?.name ?? "";
+        case "discipline": return responseValue(log.notes, "discipline") ?? log.firm?.discipline ?? "";
+        case "topic": return responseValue(log.notes, "presentationTopic") ?? "";
+        case "date": return log.logDate;
+        case "year": return log.semester?.year ?? 0;
+        case "semester": return log.semester?.label ?? "";
+        case "speaker": return responseValue(log.notes, "primaryContactName") ?? speakerName(log.firm);
+        case "outcome": return log.outcome ?? "";
+        case "notes": return log.notes ?? "";
+      }
+    };
+    return [...list].sort((a, b) => {
+      const left = value(a);
+      const right = value(b);
+      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { sensitivity: "base", numeric: true });
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [logs, searchQuery, filterSemesterId, filterOutcome, sort]);
+
+  const heading = (label: string, key: typeof sort.key) => (
+    <button type="button" className="hover:text-white" onClick={() => setSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))}>
+      {label} {sort.key === key ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>
+  );
 
   const totalLogs = filteredLogs.length;
   const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
@@ -604,15 +629,15 @@ export default function SpeakerLogsPage() {
           <table>
             <thead>
               <tr>
-                <th>Firm Name</th>
-                <th>Organization (ACCT/FIN/MIS/ALT)</th>
-                <th>Session Title/Topic</th>
-                <th>Event Date</th>
-                <th>Academic Year</th>
-                <th>Semester (Fall/Spring)</th>
-                <th>Speaker Name</th>
-                <th>Outcome (Confirmed/Spoke/Canceled/Rescheduled)</th>
-                <th>Notes</th>
+                <th>{heading("Firm Name", "firm")}</th>
+                <th>{heading("Organization (ACCT/FIN/MIS/ALT)", "discipline")}</th>
+                <th>{heading("Session Title/Topic", "topic")}</th>
+                <th>{heading("Event Date", "date")}</th>
+                <th>{heading("Academic Year", "year")}</th>
+                <th>{heading("Semester (Fall/Spring)", "semester")}</th>
+                <th>{heading("Speaker Name", "speaker")}</th>
+                <th>{heading("Outcome (Confirmed/Spoke/Canceled/Rescheduled)", "outcome")}</th>
+                <th>{heading("Notes", "notes")}</th>
                 <th></th>
               </tr>
             </thead>

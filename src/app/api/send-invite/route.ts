@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   if (!to || skipSend) {
-    const [inv] = await db.insert(invites).values({ firmId, semesterId }).returning();
+    const [inv] = await db.insert(invites).values({ firmId, semesterId, inByStatus: "invited" }).returning();
     return NextResponse.json({
       ok: true,
       invite: inv,
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
   const [inv] = await db.insert(invites).values({
     firmId,
     semesterId,
+    inByStatus: "invited",
     emailId: result.id ?? null,
   }).returning();
 

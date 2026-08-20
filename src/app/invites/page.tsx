@@ -45,6 +45,8 @@ export default function InvitesPage() {
   const [pageIneligible, setPageIneligible] = useState(1);
   const [invitedSearch, setInvitedSearch] = useState("");
   const [inviteSort, setInviteSort] = useState<{ key: InviteSortKey; direction: "asc" | "desc" }>({ key: "sentAt", direction: "desc" });
+  const [eligibleSort, setEligibleSort] = useState<{ key: "name" | "email" | "lastSpoke"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
+  const [ineligibleSort, setIneligibleSort] = useState<{ key: "name" | "lastSpoke"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
 
   const safeJson = async (res: Response): Promise<unknown> => {
     const raw = await res.text();
@@ -185,15 +187,35 @@ export default function InvitesPage() {
     }
   };
 
-  const eligibleToShow = firms.filter((f) => f.eligible && !f.alreadyInvited);
+  const sortEligibility = (list: FirmEligibility[], sort: { key: "name" | "email" | "lastSpoke"; direction: "asc" | "desc" }) => [...list].sort((a, b) => {
+    const value = (firm: FirmEligibility) => sort.key === "email" ? firm.contactEmail ?? "" : sort.key === "lastSpoke" ? firm.lastSpokeSemester ?? "" : firm.name;
+    const result = value(a).localeCompare(value(b), undefined, { sensitivity: "base", numeric: true });
+    return sort.direction === "asc" ? result : -result;
+  });
+  const eligibleToShow = sortEligibility(firms.filter((f) => f.eligible && !f.alreadyInvited), eligibleSort);
   const ineligible = useMemo(() => {
     const unique = new Map<string, FirmEligibility>();
     for (const firm of firms.filter((item) => !item.eligible)) {
       const key = firm.name.trim().toLocaleLowerCase();
       if (!unique.has(key)) unique.set(key, firm);
     }
-    return Array.from(unique.values());
-  }, [firms]);
+    return sortEligibility(Array.from(unique.values()), ineligibleSort);
+  }, [firms, ineligibleSort]);
+
+  const eligibilityHeading = (label: string, key: "name" | "email" | "lastSpoke", section: "eligible" | "ineligible") => {
+    const current = section === "eligible" ? eligibleSort : ineligibleSort;
+    const update = () => {
+      if (section === "eligible") {
+        setEligibleSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
+      } else {
+        const safeKey = key === "email" ? "name" : key;
+        setIneligibleSort((previous) => ({ key: safeKey, direction: previous.key === safeKey && previous.direction === "asc" ? "desc" : "asc" }));
+      }
+    };
+    return <button type="button" className="hover:text-white" onClick={update}>
+      {label} {current.key === key ? (current.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>;
+  };
 
   const filteredAndSortedInvites = useMemo(() => {
     const query = invitedSearch.trim().toLocaleLowerCase();
@@ -348,9 +370,9 @@ export default function InvitesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Firm</th>
-                    <th>Contact email</th>
-                    <th>Last spoke</th>
+                    <th>{eligibilityHeading("Firm", "name", "eligible")}</th>
+                    <th>{eligibilityHeading("Contact email", "email", "eligible")}</th>
+                    <th>{eligibilityHeading("Last spoke", "lastSpoke", "eligible")}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -511,8 +533,8 @@ export default function InvitesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Firm</th>
-                    <th>Last spoke</th>
+                    <th>{eligibilityHeading("Firm", "name", "ineligible")}</th>
+                    <th>{eligibilityHeading("Last spoke", "lastSpoke", "ineligible")}</th>
                     <th></th>
                   </tr>
                 </thead>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { schedulingSubmissions, speakerLogs, events, firms, semesters } from "@/db/schema";
+import { schedulingSubmissions, speakerLogs, events, firms, semesters, invites } from "@/db/schema";
 import { and, asc, eq, like, sql } from "drizzle-orm";
 
 /**
@@ -46,12 +46,21 @@ export async function POST(request: Request) {
   }
 
   const firmName = stringValue(body.firmName) ?? stringValue(body.company) ?? stringValue(body.firm);
+  const firmEmail = stringValue(body.primaryContactEmail) ?? stringValue(body.firmEmail) ?? stringValue(body.email);
   const semesterLabel = stringValue(body.semester) ?? stringValue(body.semesterLabel);
 
   let firmId: number | null = null;
   let semesterId: number | null = null;
 
-  if (firmName) {
+  if (firmEmail) {
+    const emailMatch = await db.query.firms.findFirst({
+      where: sql`lower(trim(${firms.contactEmail})) = lower(${firmEmail})`,
+      columns: { id: true },
+      orderBy: [asc(firms.id)],
+    });
+    if (emailMatch) firmId = emailMatch.id;
+  }
+  if (firmId === null && firmName) {
     const match = await db.query.firms.findFirst({
       where: sql`lower(trim(${firms.name})) = lower(${firmName})`,
       columns: { id: true },
@@ -86,7 +95,14 @@ export async function POST(request: Request) {
     }).returning();
 
     let speakerLogId: number | null = null;
+    let inviteUpdated = false;
     if (firmId !== null && semesterId !== null) {
+      const updatedInvites = await tx.update(invites).set({
+        inByStatus: "scheduled",
+        replied: true,
+      }).where(and(eq(invites.firmId, firmId), eq(invites.semesterId, semesterId))).returning({ id: invites.id });
+      inviteUpdated = updatedInvites.length > 0;
+
       let event = await tx.query.events.findFirst({
         where: and(eq(events.firmId, firmId), eq(events.semesterId, semesterId)),
       });
@@ -122,10 +138,10 @@ export async function POST(request: Request) {
       }
     }
 
-    return { submissionId: submission?.id, speakerLogId };
+    return { submissionId: submission?.id, speakerLogId, inviteUpdated };
   });
 
-  return NextResponse.json({ ok: true, id: result.submissionId, speakerLogId: result.speakerLogId });
+  return NextResponse.json({ ok: true, id: result.submissionId, speakerLogId: result.speakerLogId, inviteUpdated: result.inviteUpdated });
 }
 
 export async function GET() {

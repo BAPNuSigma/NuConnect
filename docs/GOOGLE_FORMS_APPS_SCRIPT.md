@@ -164,12 +164,15 @@ The webhook matches submissions to **firms** and **semesters** in your app when 
 |-------------|---------|
 | `firmName`  | Matched to a firm by name (partial match). Also accepted: `company`, `firm`. |
 | `semester` or `semesterLabel` | Matched to a semester by label (e.g. `"Spring 2026"`). |
+| `primaryContactEmail`, `firmEmail`, or `email` | Matched exactly to the invited NuConnect contact. Email matching takes priority over firm-name matching. |
 
 Any other keys you send are stored in the raw payload and shown in the Scheduling table. When both
 the firm and semester can be matched, NuConnect also creates a **Confirmed** Speaker Log or updates
 the existing log for that firm and semester. `preferredDate` becomes the log/event date, and the
 remaining responses are copied into the log notes. Repeated submissions update that log instead of
 creating duplicates, while preserving an outcome that staff have subsequently changed.
+If an invite exists for the matched contact and semester, its in-by status is automatically changed
+from **Invited** to **Scheduled** and its replied checkbox is selected.
 
 ---
 

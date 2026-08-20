@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     firmId: row.firmId,
     semesterId: row.semesterId,
     sentAt: row.sentAt,
-    inByStatus: row.inByStatus ?? null,
+    inByStatus: row.inByStatus ?? "invited",
     followUpDate: row.followUpDate ?? null,
     replied: row.replied ?? false,
     firm:
@@ -72,6 +72,7 @@ export async function POST(request: Request) {
   const [row] = await db.insert(invites).values({
     firmId: parsed.data.firmId,
     semesterId: parsed.data.semesterId,
+    inByStatus: "invited",
   }).returning();
   return NextResponse.json(row);
 }

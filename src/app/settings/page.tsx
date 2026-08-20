@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Semester = {
   id: number;
@@ -36,6 +36,27 @@ export default function SettingsPage() {
   const [editingDates, setEditingDates] = useState<Record<number, { startDate: string; endDate: string }>>({});
   const [editingCapacity, setEditingCapacity] = useState<Record<number, string>>({});
   const [savingCapacity, setSavingCapacity] = useState<number | null>(null);
+  const [semesterSort, setSemesterSort] = useState<{ key: "label" | "capacity" | "filled" | "startDate" | "endDate"; direction: "asc" | "desc" }>({ key: "label", direction: "desc" });
+
+  const sortedSemesters = useMemo(() => [...semesters].sort((a, b) => {
+    const value = (semester: Semester): string | number => {
+      if (semesterSort.key === "capacity") return semester.speakerCapacity ?? -1;
+      if (semesterSort.key === "filled") return semester.filledSlots ?? 0;
+      if (semesterSort.key === "startDate") return semester.startDate ?? "";
+      if (semesterSort.key === "endDate") return semester.endDate ?? "";
+      return semester.label;
+    };
+    const left = value(a);
+    const right = value(b);
+    const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { sensitivity: "base", numeric: true });
+    return semesterSort.direction === "asc" ? result : -result;
+  }), [semesters, semesterSort]);
+
+  const semesterHeading = (label: string, key: typeof semesterSort.key) => (
+    <button type="button" className="hover:text-white" onClick={() => setSemesterSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))}>
+      {label} {semesterSort.key === key ? (semesterSort.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>
+  );
 
   const safeJson = async (res: Response) => {
     const text = await res.text();
@@ -405,16 +426,16 @@ export default function SettingsPage() {
           <table>
             <thead>
               <tr>
-                <th>Semester</th>
-                <th>Speaker capacity</th>
-                <th>Filled / Remaining</th>
-                <th>Start date</th>
-                <th>End date</th>
+                <th>{semesterHeading("Semester", "label")}</th>
+                <th>{semesterHeading("Speaker capacity", "capacity")}</th>
+                <th>{semesterHeading("Filled / Remaining", "filled")}</th>
+                <th>{semesterHeading("Start date", "startDate")}</th>
+                <th>{semesterHeading("End date", "endDate")}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {semesters.map((s) => (
+              {sortedSemesters.map((s) => (
                 <tr key={s.id}>
                   <td className="font-medium text-white">{s.label}</td>
                   <td>

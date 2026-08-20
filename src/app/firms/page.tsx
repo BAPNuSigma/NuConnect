@@ -77,6 +77,7 @@ export default function FirmsPage() {
   const [filterDiscipline, setFilterDiscipline] = useState("");
   const [filterLastYearSpoke, setFilterLastYearSpoke] = useState("");
   const [filterLastSemesterSpoke, setFilterLastSemesterSpoke] = useState("");
+  const [sort, setSort] = useState<{ key: keyof Firm; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const filteredFirms = React.useMemo(() => {
@@ -111,8 +112,19 @@ export default function FirmsPage() {
     if (filterLastSemesterSpoke) {
       list = list.filter((f) => (f.lastSemesterSpoke ?? "").trim().toLowerCase() === filterLastSemesterSpoke.toLowerCase());
     }
-    return list;
-  }, [firms, searchQuery, filterDiscipline, filterLastYearSpoke, filterLastSemesterSpoke]);
+    return [...list].sort((a, b) => {
+      const left = a[sort.key] ?? "";
+      const right = b[sort.key] ?? "";
+      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { sensitivity: "base", numeric: true });
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [firms, searchQuery, filterDiscipline, filterLastYearSpoke, filterLastSemesterSpoke, sort]);
+
+  const heading = (label: string, key: keyof Firm) => (
+    <button type="button" className="hover:text-white" onClick={() => setSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))}>
+      {label} {sort.key === key ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>
+  );
 
   const distinctDisciplines = React.useMemo(() => {
     const set = new Set<string>();
@@ -578,21 +590,21 @@ export default function FirmsPage() {
           <table>
             <thead>
               <tr>
-                <th>Organization Discipline</th>
-                <th>Firm Name</th>
-                <th>Contact First Name</th>
-                <th>Contact Last Name</th>
-                <th>Email</th>
-                <th>Title</th>
-                <th>Practice Area</th>
-                <th>Firm Type</th>
-                <th>Industry Focus</th>
-                <th>Location</th>
-                <th>Alumni Connection</th>
-                <th>Personalization Notes</th>
-                <th>Last year invited</th>
-                <th>Last year spoke</th>
-                <th>Last semester spoke</th>
+                <th>{heading("Organization Discipline", "discipline")}</th>
+                <th>{heading("Firm Name", "name")}</th>
+                <th>{heading("Contact First Name", "contactFirstName")}</th>
+                <th>{heading("Contact Last Name", "contactLastName")}</th>
+                <th>{heading("Email", "contactEmail")}</th>
+                <th>{heading("Title", "title")}</th>
+                <th>{heading("Practice Area", "practiceArea")}</th>
+                <th>{heading("Firm Type", "firmType")}</th>
+                <th>{heading("Industry Focus", "industryFocus")}</th>
+                <th>{heading("Location", "location")}</th>
+                <th>{heading("Alumni Connection", "alumniConnection")}</th>
+                <th>{heading("Personalization Notes", "personalizedNote")}</th>
+                <th>{heading("Last year invited", "lastAcademicYearInvited")}</th>
+                <th>{heading("Last year spoke", "lastAcademicYearSpoke")}</th>
+                <th>{heading("Last semester spoke", "lastSemesterSpoke")}</th>
                 <th></th>
               </tr>
             </thead>

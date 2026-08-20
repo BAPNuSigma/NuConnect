@@ -115,7 +115,7 @@ async function runBatch(request: Request, method: "GET" | "POST") {
   for (const firm of pending) {
     let to: string | null = firm.contactEmail?.trim() ?? null;
     if (!to && !testMode) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
@@ -129,12 +129,12 @@ async function runBatch(request: Request, method: "GET" | "POST") {
     if (testMode && testModeEmail) to = testModeEmail;
     else if (testMode && !to) {
       // Test mode, no firm email: record invite but don't send
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
     if (!to) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
@@ -149,6 +149,7 @@ async function runBatch(request: Request, method: "GET" | "POST") {
       await db.insert(invites).values({
         firmId: firm.id,
         semesterId,
+        inByStatus: "invited",
         emailId: result.id ?? null,
       });
       sent += 1;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Submission = {
   id: number;
@@ -31,6 +31,24 @@ export default function SchedulingPage() {
   const [list, setList] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [webhookUrl, setWebhookUrl] = useState("/api/webhooks/google-forms");
+  const [sort, setSort] = useState<{ key: "firm" | "semester" | "submittedAt" | "responses"; direction: "asc" | "desc" }>({ key: "submittedAt", direction: "desc" });
+
+  const sortedList = useMemo(() => [...list].sort((a, b) => {
+    const value = (row: Submission) => {
+      if (sort.key === "firm") return row.firm?.name ?? row.firmName ?? "";
+      if (sort.key === "semester") return row.semester?.label ?? "";
+      if (sort.key === "responses") return getResponses(row.rawPayload).map(([question, answer]) => `${question} ${answer}`).join(" ");
+      return row.submittedAt;
+    };
+    const result = value(a).localeCompare(value(b), undefined, { sensitivity: "base", numeric: true });
+    return sort.direction === "asc" ? result : -result;
+  }), [list, sort]);
+
+  const heading = (label: string, key: typeof sort.key) => (
+    <button type="button" className="hover:text-white" onClick={() => setSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))}>
+      {label} {sort.key === key ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>
+  );
 
   useEffect(() => {
     fetch("/api/scheduling")
@@ -89,14 +107,14 @@ export default function SchedulingPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Firm</th>
-                  <th>Semester</th>
-                  <th>Submitted at</th>
-                  <th>Form responses</th>
+                  <th>{heading("Firm", "firm")}</th>
+                  <th>{heading("Semester", "semester")}</th>
+                  <th>{heading("Submitted at", "submittedAt")}</th>
+                  <th>{heading("Form responses", "responses")}</th>
                 </tr>
               </thead>
               <tbody>
-                {list.map((row) => (
+                {sortedList.map((row) => (
                   <tr key={row.id}>
                     <td className="font-medium text-white">
                       {row.firm?.name ?? row.firmName ?? "—"}
