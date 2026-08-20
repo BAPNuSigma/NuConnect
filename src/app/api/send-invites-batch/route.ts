@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, semesters, firms, invites, speakerLogs } from "@/db/schema";
-import { eq, desc, and, count } from "drizzle-orm";
+import { eq, desc, and, count, inArray } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
 import { sendEmail } from "@/lib/email";
 import { getInviteTemplate, buildInviteEmail } from "@/lib/invite-email";
@@ -57,11 +57,11 @@ async function runBatch(request: Request, method: "GET" | "POST") {
 
   const cap = targetSemester.speakerCapacity ?? null;
   if (cap !== null) {
-    const [{ value: spokeCount }] = await db
+    const [{ value: filledCount }] = await db
       .select({ value: count() })
       .from(speakerLogs)
-      .where(and(eq(speakerLogs.semesterId, semesterId), eq(speakerLogs.outcome, "spoke")));
-    const remaining = Math.max(0, cap - spokeCount);
+      .where(and(eq(speakerLogs.semesterId, semesterId), inArray(speakerLogs.outcome, ["confirm", "spoke"])));
+    const remaining = Math.max(0, cap - filledCount);
     if (remaining === 0) {
       return NextResponse.json({ error: "This semester is full. Recruitment is closed." }, { status: 400 });
     }
@@ -115,7 +115,7 @@ async function runBatch(request: Request, method: "GET" | "POST") {
   for (const firm of pending) {
     let to: string | null = firm.contactEmail?.trim() ?? null;
     if (!to && !testMode) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
@@ -129,12 +129,12 @@ async function runBatch(request: Request, method: "GET" | "POST") {
     if (testMode && testModeEmail) to = testModeEmail;
     else if (testMode && !to) {
       // Test mode, no firm email: record invite but don't send
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
     if (!to) {
-      await db.insert(invites).values({ firmId: firm.id, semesterId });
+      await db.insert(invites).values({ firmId: firm.id, semesterId, inByStatus: "invited" });
       skippedNoEmail += 1;
       continue;
     }
@@ -149,6 +149,7 @@ async function runBatch(request: Request, method: "GET" | "POST") {
       await db.insert(invites).values({
         firmId: firm.id,
         semesterId,
+        inByStatus: "invited",
         emailId: result.id ?? null,
       });
       sent += 1;

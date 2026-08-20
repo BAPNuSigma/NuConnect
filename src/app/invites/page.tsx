@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const PAGE_SIZES = [10, 25, 50, 100] as const;
 
@@ -25,6 +25,8 @@ type InviteRecord = {
   semester: { id: number; label: string } | null;
 };
 
+type InviteSortKey = "firm" | "email" | "sentAt" | "status" | "followUpDate" | "replied";
+
 export default function InvitesPage() {
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [firms, setFirms] = useState<FirmEligibility[]>([]);
@@ -41,6 +43,10 @@ export default function InvitesPage() {
   const [pageEligible, setPageEligible] = useState(1);
   const [pageInvited, setPageInvited] = useState(1);
   const [pageIneligible, setPageIneligible] = useState(1);
+  const [invitedSearch, setInvitedSearch] = useState("");
+  const [inviteSort, setInviteSort] = useState<{ key: InviteSortKey; direction: "asc" | "desc" }>({ key: "sentAt", direction: "desc" });
+  const [eligibleSort, setEligibleSort] = useState<{ key: "name" | "email" | "lastSpoke"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
+  const [ineligibleSort, setIneligibleSort] = useState<{ key: "name" | "lastSpoke"; direction: "asc" | "desc" }>({ key: "name", direction: "asc" });
 
   const safeJson = async (res: Response): Promise<unknown> => {
     const raw = await res.text();
@@ -181,9 +187,74 @@ export default function InvitesPage() {
     }
   };
 
-  const eligibleToShow = firms.filter((f) => f.eligible && !f.alreadyInvited);
-  const invited = firms.filter((f) => f.alreadyInvited);
-  const ineligible = firms.filter((f) => !f.eligible);
+  const sortEligibility = (list: FirmEligibility[], sort: { key: "name" | "email" | "lastSpoke"; direction: "asc" | "desc" }) => [...list].sort((a, b) => {
+    const value = (firm: FirmEligibility) => sort.key === "email" ? firm.contactEmail ?? "" : sort.key === "lastSpoke" ? firm.lastSpokeSemester ?? "" : firm.name;
+    const result = value(a).localeCompare(value(b), undefined, { sensitivity: "base", numeric: true });
+    return sort.direction === "asc" ? result : -result;
+  });
+  const eligibleToShow = sortEligibility(firms.filter((f) => f.eligible && !f.alreadyInvited), eligibleSort);
+  const ineligible = useMemo(() => {
+    const unique = new Map<string, FirmEligibility>();
+    for (const firm of firms.filter((item) => !item.eligible)) {
+      const key = firm.name.trim().toLocaleLowerCase();
+      if (!unique.has(key)) unique.set(key, firm);
+    }
+    return sortEligibility(Array.from(unique.values()), ineligibleSort);
+  }, [firms, ineligibleSort]);
+
+  const eligibilityHeading = (label: string, key: "name" | "email" | "lastSpoke", section: "eligible" | "ineligible") => {
+    const current = section === "eligible" ? eligibleSort : ineligibleSort;
+    const update = () => {
+      if (section === "eligible") {
+        setEligibleSort((previous) => ({ key, direction: previous.key === key && previous.direction === "asc" ? "desc" : "asc" }));
+      } else {
+        const safeKey = key === "email" ? "name" : key;
+        setIneligibleSort((previous) => ({ key: safeKey, direction: previous.key === safeKey && previous.direction === "asc" ? "desc" : "asc" }));
+      }
+    };
+    return <button type="button" className="hover:text-white" onClick={update}>
+      {label} {current.key === key ? (current.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>;
+  };
+
+  const filteredAndSortedInvites = useMemo(() => {
+    const query = invitedSearch.trim().toLocaleLowerCase();
+    const valueFor = (invite: InviteRecord): string | number => {
+      switch (inviteSort.key) {
+        case "firm": return invite.firm?.name ?? "";
+        case "email": return invite.firm?.contactEmail ?? "";
+        case "sentAt": return invite.sentAt ? new Date(invite.sentAt).getTime() : 0;
+        case "status": return invite.inByStatus ?? "";
+        case "followUpDate": return invite.followUpDate ?? "";
+        case "replied": return invite.replied ? 1 : 0;
+      }
+    };
+    return inviteRecords
+      .filter((invite) => !query || (invite.firm?.name ?? "").toLocaleLowerCase().includes(query))
+      .sort((a, b) => {
+        const left = valueFor(a);
+        const right = valueFor(b);
+        const comparison = typeof left === "number" && typeof right === "number"
+          ? left - right
+          : String(left).localeCompare(String(right), undefined, { sensitivity: "base" });
+        return inviteSort.direction === "asc" ? comparison : -comparison;
+      });
+  }, [inviteRecords, invitedSearch, inviteSort]);
+
+  const toggleInviteSort = (key: InviteSortKey) => {
+    setInviteSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    }));
+    setPageInvited(1);
+  };
+
+  const sortableHeading = (label: string, key: InviteSortKey) => (
+    <button type="button" onClick={() => toggleInviteSort(key)} className="inline-flex items-center gap-1 hover:text-white">
+      {label}
+      <span aria-hidden="true">{inviteSort.key === key ? (inviteSort.direction === "asc" ? "▲" : "▼") : "↕"}</span>
+    </button>
+  );
 
   const paginate = <T,>(list: T[], page: number) => {
     const total = list.length;
@@ -194,7 +265,7 @@ export default function InvitesPage() {
   };
 
   const eligiblePag = paginate(eligibleToShow, pageEligible);
-  const invitedPag = paginate(inviteRecords, pageInvited);
+  const invitedPag = paginate(filteredAndSortedInvites, pageInvited);
   const ineligiblePag = paginate(ineligible, pageIneligible);
 
   useEffect(() => {
@@ -299,9 +370,9 @@ export default function InvitesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Firm</th>
-                    <th>Contact email</th>
-                    <th>Last spoke</th>
+                    <th>{eligibilityHeading("Firm", "name", "eligible")}</th>
+                    <th>{eligibilityHeading("Contact email", "email", "eligible")}</th>
+                    <th>{eligibilityHeading("Last spoke", "lastSpoke", "eligible")}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -350,6 +421,14 @@ export default function InvitesPage() {
             <p className="mt-1 text-sm text-zinc-500">
               Email sent date, in-by status, follow-up date, and replied. Override: remove invite to put firm back in pending pool.
             </p>
+            <input
+              type="search"
+              className="input mt-3 max-w-sm"
+              placeholder="Search invited firms…"
+              aria-label="Search already invited firms"
+              value={invitedSearch}
+              onChange={(event) => { setInvitedSearch(event.target.value); setPageInvited(1); }}
+            />
             {invitedPag.total > 0 && (
               <div className="flex flex-wrap items-center gap-3 mt-3 text-sm text-zinc-400">
                 <span>Showing {(invitedPag.pageSafe - 1) * pageSize + 1}–{Math.min(invitedPag.pageSafe * pageSize, invitedPag.total)} of {invitedPag.total}</span>
@@ -364,12 +443,12 @@ export default function InvitesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Firm</th>
-                    <th>Contact email</th>
-                    <th>Email sent date</th>
-                    <th>In-by status</th>
-                    <th>Follow-up date</th>
-                    <th>Replied</th>
+                    <th>{sortableHeading("Firm", "firm")}</th>
+                    <th>{sortableHeading("Contact email", "email")}</th>
+                    <th>{sortableHeading("Email sent date", "sentAt")}</th>
+                    <th>{sortableHeading("In-by status", "status")}</th>
+                    <th>{sortableHeading("Follow-up date", "followUpDate")}</th>
+                    <th>{sortableHeading("Replied", "replied")}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -425,7 +504,7 @@ export default function InvitesPage() {
                   {invitedPag.list.length === 0 && (
                     <tr>
                       <td colSpan={7} className="text-zinc-500">
-                        None yet.
+                        {invitedSearch ? "No invited firms match your search." : "None yet."}
                       </td>
                     </tr>
                   )}
@@ -454,8 +533,8 @@ export default function InvitesPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Firm</th>
-                    <th>Last spoke</th>
+                    <th>{eligibilityHeading("Firm", "name", "ineligible")}</th>
+                    <th>{eligibilityHeading("Last spoke", "lastSpoke", "ineligible")}</th>
                     <th></th>
                   </tr>
                 </thead>

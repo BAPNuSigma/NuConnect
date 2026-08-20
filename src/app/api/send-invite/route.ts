@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { firms, semesters, invites, speakerLogs } from "@/db/schema";
-import { eq, and, count, desc, asc } from "drizzle-orm";
+import { eq, and, count, desc, asc, inArray } from "drizzle-orm";
 import { isEligibleForSemester, type Term } from "@/lib/eligibility";
 import { sendEmail } from "@/lib/email";
 import { getInviteTemplate, buildInviteEmail } from "@/lib/invite-email";
@@ -37,11 +37,11 @@ export async function POST(request: Request) {
 
   const cap = semester.speakerCapacity ?? null;
   if (cap !== null) {
-    const [{ value: spokeCount }] = await db
+    const [{ value: filledCount }] = await db
       .select({ value: count() })
       .from(speakerLogs)
-      .where(and(eq(speakerLogs.semesterId, semesterId), eq(speakerLogs.outcome, "spoke")));
-    const remaining = Math.max(0, cap - spokeCount);
+      .where(and(eq(speakerLogs.semesterId, semesterId), inArray(speakerLogs.outcome, ["confirm", "spoke"])));
+    const remaining = Math.max(0, cap - filledCount);
     if (remaining === 0) {
       return NextResponse.json({ error: "This semester is full. Recruitment is closed." }, { status: 400 });
     }
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   if (!to || skipSend) {
-    const [inv] = await db.insert(invites).values({ firmId, semesterId }).returning();
+    const [inv] = await db.insert(invites).values({ firmId, semesterId, inByStatus: "invited" }).returning();
     return NextResponse.json({
       ok: true,
       invite: inv,
@@ -127,6 +127,7 @@ export async function POST(request: Request) {
   const [inv] = await db.insert(invites).values({
     firmId,
     semesterId,
+    inByStatus: "invited",
     emailId: result.id ?? null,
   }).returning();
 

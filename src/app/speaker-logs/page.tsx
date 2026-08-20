@@ -26,12 +26,20 @@ function speakerName(firm: Firm | null | undefined): string {
   return firm.contactName ?? "—";
 }
 
+function responseValue(notes: string | null, key: string): string | null {
+  if (!notes) return null;
+  const prefix = `${key}:`;
+  const line = notes.split("\n").find((item) => item.startsWith(prefix));
+  return line?.slice(prefix.length).trim() || null;
+}
+
 export default function SpeakerLogsPage() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [firms, setFirms] = useState<Firm[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedFirmName, setSelectedFirmName] = useState("");
   const [form, setForm] = useState({
     firmId: 0,
     semesterId: 0,
@@ -49,6 +57,7 @@ export default function SpeakerLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSemesterId, setFilterSemesterId] = useState<string>("");
   const [filterOutcome, setFilterOutcome] = useState("");
+  const [sort, setSort] = useState<{ key: "firm" | "discipline" | "topic" | "date" | "year" | "semester" | "speaker" | "outcome" | "notes"; direction: "asc" | "desc" }>({ key: "date", direction: "desc" });
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const filteredLogs = React.useMemo(() => {
@@ -75,8 +84,32 @@ export default function SpeakerLogsPage() {
     if (filterOutcome) {
       list = list.filter((log) => (log.outcome ?? "") === filterOutcome);
     }
-    return list;
-  }, [logs, searchQuery, filterSemesterId, filterOutcome]);
+    const value = (log: Log): string | number => {
+      switch (sort.key) {
+        case "firm": return log.firm?.name ?? "";
+        case "discipline": return responseValue(log.notes, "discipline") ?? log.firm?.discipline ?? "";
+        case "topic": return responseValue(log.notes, "presentationTopic") ?? "";
+        case "date": return log.logDate;
+        case "year": return log.semester?.year ?? 0;
+        case "semester": return log.semester?.label ?? "";
+        case "speaker": return responseValue(log.notes, "primaryContactName") ?? speakerName(log.firm);
+        case "outcome": return log.outcome ?? "";
+        case "notes": return log.notes ?? "";
+      }
+    };
+    return [...list].sort((a, b) => {
+      const left = value(a);
+      const right = value(b);
+      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right), undefined, { sensitivity: "base", numeric: true });
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [logs, searchQuery, filterSemesterId, filterOutcome, sort]);
+
+  const heading = (label: string, key: typeof sort.key) => (
+    <button type="button" className="hover:text-white" onClick={() => setSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))}>
+      {label} {sort.key === key ? (sort.direction === "asc" ? "▲" : "▼") : "↕"}
+    </button>
+  );
 
   const totalLogs = filteredLogs.length;
   const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
@@ -160,6 +193,10 @@ export default function SpeakerLogsPage() {
     }
     return Array.from(byName.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [firms]);
+  const speakersForSelectedFirm = React.useMemo(() => {
+    const key = selectedFirmName.trim().toLocaleLowerCase();
+    return firms.filter((firm) => firm.name.trim().toLocaleLowerCase() === key);
+  }, [firms, selectedFirmName]);
   const fetchSemesters = async () => {
     const res = await fetch("/api/semesters");
     const data = await safeJson(res);
@@ -196,6 +233,7 @@ export default function SpeakerLogsPage() {
       thankYouSent: false,
       notes: "",
     });
+    setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
     fetchLogs();
   };
 
@@ -351,6 +389,7 @@ export default function SpeakerLogsPage() {
                 thankYouSent: false,
                 notes: "",
               });
+              setSelectedFirmName(firmsByUniqueName[0]?.name ?? "");
               setShowForm(true);
             }}
             className="btn-primary"
@@ -484,13 +523,35 @@ export default function SpeakerLogsPage() {
               <span className="block text-sm text-zinc-500 mb-1">Firm</span>
               <select
                 className="input"
+                value={selectedFirmName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const firstContact = firms.find((firm) => firm.name === name);
+                  setSelectedFirmName(name);
+                  setForm((previous) => ({ ...previous, firmId: firstContact?.id ?? 0 }));
+                }}
+                required
+              >
+                <option value="">Select…</option>
+                {firmsByUniqueName.map((f) => (
+                  <option key={f.id} value={f.name}>{f.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="block text-sm text-zinc-500 mb-1">Speaker</span>
+              <select
+                className="input"
                 value={form.firmId}
-                onChange={(e) => setForm((p) => ({ ...p, firmId: Number(e.target.value) }))}
+                onChange={(e) => setForm((previous) => ({ ...previous, firmId: Number(e.target.value) }))}
+                disabled={!selectedFirmName}
                 required
               >
                 <option value={0}>Select…</option>
-                {firmsByUniqueName.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
+                {speakersForSelectedFirm.map((firm) => (
+                  <option key={firm.id} value={firm.id}>
+                    {speakerName(firm) === "—" ? "Contact name unavailable" : speakerName(firm)}
+                  </option>
                 ))}
               </select>
             </label>
@@ -568,15 +629,15 @@ export default function SpeakerLogsPage() {
           <table>
             <thead>
               <tr>
-                <th>Firm Name</th>
-                <th>Organization (ACCT/FIN/MIS/ALT)</th>
-                <th>Session Title/Topic</th>
-                <th>Event Date</th>
-                <th>Academic Year</th>
-                <th>Semester (Fall/Spring)</th>
-                <th>Speaker Name</th>
-                <th>Outcome (Confirmed/Spoke/Canceled/Rescheduled)</th>
-                <th>Notes</th>
+                <th>{heading("Firm Name", "firm")}</th>
+                <th>{heading("Organization (ACCT/FIN/MIS/ALT)", "discipline")}</th>
+                <th>{heading("Session Title/Topic", "topic")}</th>
+                <th>{heading("Event Date", "date")}</th>
+                <th>{heading("Academic Year", "year")}</th>
+                <th>{heading("Semester (Fall/Spring)", "semester")}</th>
+                <th>{heading("Speaker Name", "speaker")}</th>
+                <th>{heading("Outcome (Confirmed/Spoke/Canceled/Rescheduled)", "outcome")}</th>
+                <th>{heading("Notes", "notes")}</th>
                 <th></th>
               </tr>
             </thead>
@@ -584,12 +645,12 @@ export default function SpeakerLogsPage() {
               {paginatedLogs.map((log) => (
                 <tr key={log.id}>
                   <td className="font-medium text-white">{log.firm?.name ?? "—"}</td>
-                  <td>{log.firm?.discipline ?? "—"}</td>
-                  <td>—</td>
+                  <td>{responseValue(log.notes, "discipline") ?? log.firm?.discipline ?? "—"}</td>
+                  <td>{responseValue(log.notes, "presentationTopic") ?? "—"}</td>
                   <td>{log.logDate}</td>
                   <td>{log.semester?.year ?? "—"}</td>
                   <td>{log.semester?.label ?? "—"}</td>
-                  <td>{speakerName(log.firm)}</td>
+                  <td>{responseValue(log.notes, "primaryContactName") ?? speakerName(log.firm)}</td>
                   <td>
                     <select
                       className="input py-1 text-sm w-28"
