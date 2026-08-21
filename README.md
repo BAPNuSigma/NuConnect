@@ -28,7 +28,7 @@ NuConnect uses Turso/libSQL through Drizzle ORM so writes persist correctly on s
 | Area | Description |
 |------|-------------|
 | **Firms** | Add firms with contact email and name; edit and delete as needed. |
-| **Find Leads** | Search the open web for candidate firms (via free Google and/or Brave search APIs) and add the ones you want straight into Firms. See [Lead search setup](#lead-search-setup). |
+| **Find Leads** | Search the open web for candidate firms (via Brave's Search API, and optionally Google) and add the ones you want straight into Firms. See [Lead search setup](#lead-search-setup). |
 | **Invites** | Per semester: see who is eligible (1-year rule), who was already invited, and send invite emails in batch or on a schedule. |
 | **Eligibility rule** | A firm that spoke in Spring 2026 cannot be invited again until Spring 2027 (same semester, next year). |
 | **Speaker logs** | Log who spoke when and mark thank-you sent. Logging a speaker automatically records an event for eligibility. |
@@ -181,18 +181,19 @@ Use Google Apps Script on your form’s **Submit** trigger to POST the form resp
 
 ## 🔎 Lead search setup
 
-The **Find Leads** page discovers candidate firms with free search APIs — no paid lead-gen vendor involved. You can configure one provider or both; if both are set, results are merged and deduped, which also gives you a fallback if one provider's free quota runs out.
+The **Find Leads** page discovers candidate firms with search APIs — no paid lead-gen vendor involved.
 
-**Google** (100 free searches/day):
+**Brave** (primary provider):
+1. Sign up for the **Search** plan (not Answers — that's for AI-generated conversational answers, not raw results) at [api.search.brave.com/app/keys](https://api.search.brave.com/app/keys) and copy the API key. A card is required; Brave bills $5 per 1,000 queries with a $5/month renewing credit (roughly 1,000 free searches/month) and **no built-in spending cap** past that.
+2. Set `BRAVE_API_KEY` in your `.env` (or Vercel environment variables).
+3. Because Brave has no spend cap of its own, NuConnect tracks its own monthly query count (stored in `app_settings`) and stops calling Brave once `BRAVE_MONTHLY_QUERY_CAP` (default 900, comfortably under the ~1,000 the free credit covers) is hit for the calendar month — the search still runs on any other configured provider, and the **Find Leads** page shows the running count. Raise the cap only if you're comfortable being billed past the free credit.
+
+**Google** (optional, only if you already have an eligible Cloud project): the Custom Search JSON API has been closed to new signups since 2025 and is being fully retired on 2027-01-01, so this only works for existing projects.
 1. Create a search engine at [programmablesearchengine.google.com](https://programmablesearchengine.google.com/), set it to search the entire web, and copy its **Search engine ID**.
 2. Create an API key for the **Custom Search JSON API** at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) (enable the API on the project first).
 3. Set `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_ID` in your `.env` (or Vercel environment variables).
 
-**Brave** (2,000 free searches/month):
-1. Sign up for the free "Data for AI" plan at [api.search.brave.com/app/keys](https://api.search.brave.com/app/keys) and copy the API key.
-2. Set `BRAVE_API_KEY` in your `.env` (or Vercel environment variables).
-
-Each result is checked against your existing Firms list by name so you don't re-add a firm you already track. Selecting a result and clicking **Find contact** scans that firm's own website for a public email or phone number — nothing is stored until you click **Add selected to Firms**.
+If both are configured, results are merged and deduped. Each result is checked against your existing Firms list by name so you don't re-add a firm you already track. Selecting a result and clicking **Find contact** scans that firm's own website for a public email or phone number — nothing is stored until you click **Add selected to Firms**.
 
 ---
 

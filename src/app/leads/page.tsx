@@ -19,6 +19,8 @@ type LeadRow = {
   added: boolean;
 };
 
+type BraveUsage = { used: number; cap: number; paused: boolean };
+
 const emptyForm = { discipline: "", location: "", firmType: "" };
 
 export default function LeadsPage() {
@@ -28,6 +30,7 @@ export default function LeadsPage() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [braveUsage, setBraveUsage] = useState<BraveUsage | null>(null);
 
   const selectedCount = results.filter((r) => r.selected && r.status === "new" && !r.added).length;
 
@@ -49,6 +52,7 @@ export default function LeadsPage() {
         return;
       }
       setQuery(data.query ?? null);
+      setBraveUsage(data.brave ?? null);
       setResults(
         (data.results ?? []).map((r: Omit<LeadRow, "selected" | "enriching" | "contactEmail" | "contactPhone" | "enrichError" | "added">) => ({
           ...r,
@@ -180,6 +184,13 @@ export default function LeadsPage() {
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
+
+      {braveUsage && (
+        <p className="text-xs text-zinc-500">
+          Brave: {braveUsage.used}/{braveUsage.cap} searches used this month
+          {braveUsage.paused && " — budget reached, this search ran on Google only until next month"}.
+        </p>
+      )}
 
       {searchError && (
         <div className="card border-red-900/50 text-red-400 text-sm">{searchError}</div>

@@ -46,6 +46,15 @@ export function isLeadSearchConfigured(): boolean {
   return isGoogleSearchConfigured() || isBraveSearchConfigured();
 }
 
+const DEFAULT_BRAVE_MONTHLY_CAP = 900; // stays under the ~1,000 queries Brave's $5/month free credit covers
+
+/** How many Brave queries we'll allow per calendar month before pausing Brave (app-level guard; Brave itself has no spend cap). */
+export function braveMonthlyCap(): number {
+  const raw = process.env.BRAVE_MONTHLY_QUERY_CAP;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BRAVE_MONTHLY_CAP;
+}
+
 export type LeadCandidate = {
   name: string;
   url: string;
@@ -153,14 +162,18 @@ async function searchBrave(query: string, count: number): Promise<ProviderResult
 
 export async function searchBusinesses(
   input: LeadSearchInput,
-  count = 10
+  opts: { count?: number; useBrave?: boolean } = {}
 ): Promise<{ ok: true; query: string; results: LeadCandidate[] } | { ok: false; error: string }> {
+  const count = opts.count ?? 10;
   const googleOn = isGoogleSearchConfigured();
-  const braveOn = isBraveSearchConfigured();
+  // useBrave defaults to true; the search route sets it false once the monthly budget is used up.
+  const braveOn = isBraveSearchConfigured() && opts.useBrave !== false;
   if (!googleOn && !braveOn) {
     return {
       ok: false,
-      error: "Lead search isn't configured. Set GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID, and/or BRAVE_API_KEY.",
+      error: isBraveSearchConfigured()
+        ? "Brave's monthly search budget is used up for this cycle. It resumes next month, or raise BRAVE_MONTHLY_QUERY_CAP."
+        : "Lead search isn't configured. Set GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID, and/or BRAVE_API_KEY.",
     };
   }
 
