@@ -9,6 +9,7 @@ type LeadRow = {
   url: string;
   displayLink: string;
   snippet: string;
+  source: "google" | "brave";
   status: LeadStatus;
   selected: boolean;
   enriching: boolean;
@@ -223,7 +224,9 @@ export default function LeadsPage() {
                       <a href={r.url} target="_blank" rel="noreferrer" className="font-medium text-white hover:text-[var(--accent)]">
                         {r.name}
                       </a>
-                      <div className="text-xs text-zinc-500">{r.displayLink}</div>
+                      <div className="text-xs text-zinc-500">
+                        {r.displayLink} <span className="text-zinc-600">· via {r.source === "google" ? "Google" : "Brave"}</span>
+                      </div>
                     </td>
                     <td className="max-w-[280px] text-zinc-400 text-sm">{r.snippet}</td>
                     <td className="min-w-[180px]">

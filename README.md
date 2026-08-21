@@ -28,7 +28,7 @@ NuConnect uses Turso/libSQL through Drizzle ORM so writes persist correctly on s
 | Area | Description |
 |------|-------------|
 | **Firms** | Add firms with contact email and name; edit and delete as needed. |
-| **Find Leads** | Search the open web for candidate firms (via a free Google Programmable Search Engine) and add the ones you want straight into Firms. See [Lead search setup](#lead-search-setup). |
+| **Find Leads** | Search the open web for candidate firms (via free Google and/or Brave search APIs) and add the ones you want straight into Firms. See [Lead search setup](#lead-search-setup). |
 | **Invites** | Per semester: see who is eligible (1-year rule), who was already invited, and send invite emails in batch or on a schedule. |
 | **Eligibility rule** | A firm that spoke in Spring 2026 cannot be invited again until Spring 2027 (same semester, next year). |
 | **Speaker logs** | Log who spoke when and mark thank-you sent. Logging a speaker automatically records an event for eligibility. |
@@ -181,11 +181,16 @@ Use Google Apps Script on your form’s **Submit** trigger to POST the form resp
 
 ## 🔎 Lead search setup
 
-The **Find Leads** page discovers candidate firms with Google's Programmable Search Engine — no paid lead-gen vendor involved. It's free up to 100 searches/day.
+The **Find Leads** page discovers candidate firms with free search APIs — no paid lead-gen vendor involved. You can configure one provider or both; if both are set, results are merged and deduped, which also gives you a fallback if one provider's free quota runs out.
 
+**Google** (100 free searches/day):
 1. Create a search engine at [programmablesearchengine.google.com](https://programmablesearchengine.google.com/), set it to search the entire web, and copy its **Search engine ID**.
 2. Create an API key for the **Custom Search JSON API** at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials) (enable the API on the project first).
 3. Set `GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_ID` in your `.env` (or Vercel environment variables).
+
+**Brave** (2,000 free searches/month):
+1. Sign up for the free "Data for AI" plan at [api.search.brave.com/app/keys](https://api.search.brave.com/app/keys) and copy the API key.
+2. Set `BRAVE_API_KEY` in your `.env` (or Vercel environment variables).
 
 Each result is checked against your existing Firms list by name so you don't re-add a firm you already track. Selecting a result and clicking **Find contact** scans that firm's own website for a public email or phone number — nothing is stored until you click **Add selected to Firms**.
 

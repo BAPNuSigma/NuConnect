@@ -1,11 +1,13 @@
 /**
  * Lead search: find candidate firms on the open web (no third-party lead database).
- * Discovery uses the Google Programmable Search Engine (Custom Search JSON API), which
- * has a free tier (100 queries/day). Contact info is pulled by fetching each firm's own
- * site and scanning it for emails/phone numbers — no paid enrichment provider involved.
+ * Discovery runs against Google's Programmable Search Engine (100 free queries/day) and/or
+ * Brave's Search API (2,000 free queries/month) — whichever are configured — and merges the
+ * results. Contact info is pulled by fetching each firm's own site and scanning it for
+ * emails/phone numbers — no paid enrichment provider involved.
  */
 
 const GOOGLE_CSE_ENDPOINT = "https://www.googleapis.com/customsearch/v1";
+const BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 
 const FIRM_SUFFIXES = /\b(llc|llp|lp|pllc|pc|inc|incorporated|corp|corporation|co|company|group|partners|associates|ltd)\b/g;
 
@@ -32,8 +34,16 @@ export function buildLeadQuery({ discipline, location, firmType }: LeadSearchInp
   return location ? `${base} in ${location}` : base;
 }
 
-export function isLeadSearchConfigured(): boolean {
+export function isGoogleSearchConfigured(): boolean {
   return !!(process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_ID);
+}
+
+export function isBraveSearchConfigured(): boolean {
+  return !!process.env.BRAVE_API_KEY;
+}
+
+export function isLeadSearchConfigured(): boolean {
+  return isGoogleSearchConfigured() || isBraveSearchConfigured();
 }
 
 export type LeadCandidate = {
@@ -41,21 +51,27 @@ export type LeadCandidate = {
   url: string;
   displayLink: string;
   snippet: string;
+  source: "google" | "brave";
 };
+
+type ProviderResult = { ok: true; results: LeadCandidate[] } | { ok: false; error: string };
 
 /** Search results often carry a "Title | Site Name" suffix; keep the part before it. */
 function cleanTitle(title: string): string {
   return title.split(/\s[|–]\s|\s-\s/)[0].trim();
 }
 
-export async function searchBusinesses(
-  input: LeadSearchInput,
-  count = 10
-): Promise<{ ok: true; query: string; results: LeadCandidate[] } | { ok: false; error: string }> {
-  if (!isLeadSearchConfigured()) {
-    return { ok: false, error: "Lead search isn't configured. Set GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID." };
+/** Collapse a URL to host+path so the same firm found by both providers dedupes to one row. */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch {
+    return url.toLowerCase();
   }
-  const query = buildLeadQuery(input);
+}
+
+async function searchGoogle(query: string, count: number): Promise<ProviderResult> {
   const params = new URLSearchParams({
     key: process.env.GOOGLE_CSE_API_KEY!,
     cx: process.env.GOOGLE_CSE_ID!,
@@ -76,7 +92,7 @@ export async function searchBusinesses(
   } | null;
 
   if (!res.ok) {
-    return { ok: false, error: body?.error?.message ?? `Search failed (${res.status})` };
+    return { ok: false, error: `Google: ${body?.error?.message ?? `search failed (${res.status})`}` };
   }
 
   const results: LeadCandidate[] = (body?.items ?? [])
@@ -86,7 +102,90 @@ export async function searchBusinesses(
       url: item.link!,
       displayLink: item.displayLink ?? "",
       snippet: item.snippet ?? "",
+      source: "google",
     }));
+
+  return { ok: true, results };
+}
+
+async function searchBrave(query: string, count: number): Promise<ProviderResult> {
+  const params = new URLSearchParams({ q: query, count: String(Math.min(Math.max(count, 1), 20)) });
+
+  let res: Response;
+  try {
+    res = await fetch(`${BRAVE_ENDPOINT}?${params.toString()}`, {
+      headers: { Accept: "application/json", "X-Subscription-Token": process.env.BRAVE_API_KEY! },
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch {
+    return { ok: false, error: "Couldn't reach Brave's search API." };
+  }
+
+  const body = (await res.json().catch(() => null)) as {
+    web?: { results?: { title?: string; url?: string; description?: string }[] };
+    message?: string;
+  } | null;
+
+  if (!res.ok) {
+    return { ok: false, error: `Brave: ${body?.message ?? `search failed (${res.status})`}` };
+  }
+
+  const results: LeadCandidate[] = (body?.web?.results ?? [])
+    .filter((item) => !!item.url)
+    .map((item) => {
+      let host = "";
+      try {
+        host = new URL(item.url!).hostname;
+      } catch {
+        // leave host blank if the URL is malformed
+      }
+      return {
+        name: cleanTitle(item.title ?? host ?? "Unknown"),
+        url: item.url!,
+        displayLink: host,
+        snippet: item.description ?? "",
+        source: "brave",
+      };
+    });
+
+  return { ok: true, results };
+}
+
+export async function searchBusinesses(
+  input: LeadSearchInput,
+  count = 10
+): Promise<{ ok: true; query: string; results: LeadCandidate[] } | { ok: false; error: string }> {
+  const googleOn = isGoogleSearchConfigured();
+  const braveOn = isBraveSearchConfigured();
+  if (!googleOn && !braveOn) {
+    return {
+      ok: false,
+      error: "Lead search isn't configured. Set GOOGLE_CSE_API_KEY + GOOGLE_CSE_ID, and/or BRAVE_API_KEY.",
+    };
+  }
+
+  const query = buildLeadQuery(input);
+  const tasks: Promise<ProviderResult>[] = [];
+  if (googleOn) tasks.push(searchGoogle(query, count));
+  if (braveOn) tasks.push(searchBrave(query, count));
+  const settled = await Promise.all(tasks);
+
+  const seen = new Set<string>();
+  const results: LeadCandidate[] = [];
+  for (const outcome of settled) {
+    if (!outcome.ok) continue;
+    for (const candidate of outcome.results) {
+      const key = normalizeUrl(candidate.url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(candidate);
+    }
+  }
+
+  if (results.length === 0) {
+    const errors = settled.filter((o): o is { ok: false; error: string } => !o.ok).map((o) => o.error);
+    if (errors.length > 0) return { ok: false, error: errors.join(" ") };
+  }
 
   return { ok: true, query, results };
 }
