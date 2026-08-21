@@ -199,7 +199,7 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {results.map((r, idx) => (
-                  <tr key={r.url}>
+                  <tr key={idx}>
                     <td>
                       <input
                         type="checkbox"
