@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { firms, invites, semesters, speakerLogs, schedulingSubmissions, events } from "@/db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 const firmFields = z.object({
@@ -34,7 +34,8 @@ export async function GET() {
       .from(invites)
       .innerJoin(semesters, eq(invites.semesterId, semesters.id))
       .orderBy(desc(invites.sentAt)),
-    // Last spoke from speaker_logs (outcome = 'spoke') so Firms page matches Speaker logs page
+    // Last visit from speaker_logs: outcome 'confirm' or 'spoke' both count for the 1-year rule
+    // so the Firms page matches Speaker logs & Invites pages
     db.select({
       firmId: speakerLogs.firmId,
       year: semesters.year,
@@ -42,7 +43,7 @@ export async function GET() {
     })
       .from(speakerLogs)
       .innerJoin(semesters, eq(speakerLogs.semesterId, semesters.id))
-      .where(eq(speakerLogs.outcome, "spoke"))
+      .where(inArray(speakerLogs.outcome, ["confirm", "spoke"]))
       .orderBy(desc(semesters.year), asc(semesters.term)), // Fall after Spring for same year = latest first
   ]);
 
@@ -52,6 +53,7 @@ export async function GET() {
       lastInvitedByFirmId.set(row.firmId, { year: row.year, label: row.label });
     }
   }
+  // Rows come newest-semester-first, so the first row per firm is their latest visit.
   const lastSpokeByFirmId = new Map<number, { year: number; label: string }>();
   for (const row of spokeRows) {
     if (!lastSpokeByFirmId.has(row.firmId)) {

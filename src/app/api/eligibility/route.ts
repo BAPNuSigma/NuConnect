@@ -47,7 +47,8 @@ export async function GET(request: Request) {
   });
   const sentSet = new Set(sentInvites.map((i) => i.firmId));
 
-  // Last spoke from speaker_logs (outcome = 'spoke') so Invites page matches Speaker logs & Firms
+  // Last spoke from speaker_logs: any confirmed or completed visit blocks re-invite for 1 year
+  // (outcome 'confirm' or 'spoke'), so the Invites page matches Speaker logs & Firms.
   const lastSpokeRows = await db
     .select({
       firmId: speakerLogs.firmId,
@@ -57,9 +58,10 @@ export async function GET(request: Request) {
     })
     .from(speakerLogs)
     .innerJoin(semesters, eq(speakerLogs.semesterId, semesters.id))
-    .where(eq(speakerLogs.outcome, "spoke"))
+    .where(inArray(speakerLogs.outcome, ["confirm", "spoke"]))
     .orderBy(desc(semesters.year), asc(semesters.term)); // latest semester first (Fall after Spring)
 
+  // Rows come newest-semester-first, so the first row per firm is their latest visit.
   const lastByFirmId = new Map<number, { year: number; term: string; label: string }>();
   for (const row of lastSpokeRows) {
     if (!lastByFirmId.has(row.firmId)) {

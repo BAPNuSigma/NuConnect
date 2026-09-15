@@ -54,12 +54,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invite already sent for this firm/semester" }, { status: 409 });
   }
 
-  // Enforce 1-year rule: do not send to firms that spoke within the last year (same as batch + Invites page)
+  // Enforce 1-year rule: do not send to firms with a confirmed or completed visit in the last year
+  // (same as batch + Invites page)
   const lastSpokeRow = await db
     .select({ year: semesters.year, term: semesters.term })
     .from(speakerLogs)
     .innerJoin(semesters, eq(speakerLogs.semesterId, semesters.id))
-    .where(and(eq(speakerLogs.firmId, firmId), eq(speakerLogs.outcome, "spoke")))
+    .where(and(eq(speakerLogs.firmId, firmId), inArray(speakerLogs.outcome, ["confirm", "spoke"])))
     .orderBy(desc(semesters.year), asc(semesters.term))
     .limit(1)
     .then((rows) => rows[0]);
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Firm is not eligible under the 1-year rule (they spoke recently). They become eligible again for the same semester next year.",
+            "Firm is not eligible under the 1-year rule (they have a confirmed or completed visit within the last year). They become eligible again for the same semester next year.",
         },
         { status: 400 }
       );
